@@ -1,0 +1,697 @@
+(function () {
+  'use strict';
+
+  var api = window.ksuApi;
+
+  /* ---------- 常量 ---------- */
+  var FALLBACK_MOD_ID = 'HyperOS-3CO';
+  var MOD_DIR = '/data/adb/modules/' + FALLBACK_MOD_ID;
+  var AUTO_REFRESH_MS = 60000;
+  var REFRESH_DELAY_MS = 500;
+  var SPAWN_TIMEOUT_MS = 120000;
+  var LOG_MAX_NODES = 1600;
+
+  /* 5 个开关，与 action.sh CONFIG_KEYS / check_status.sh 输出对应 */
+  var TOGGLE_DEFS = {
+    enable_battery_sync: {
+      label: '电池白名单同步',
+      desc: '把 deviceidle 电池白名单同步到 PowerKeeper / Joyose（下次开机生效）',
+      def: '1'
+    },
+    enable_static_protect: {
+      label: 'PowerKeeper 静态保护',
+      desc: '把所有第三方应用写入 noRestrict + 多白名单（下次开机生效）',
+      def: '0',
+      hot: true
+    },
+    enable_refresh_follow: {
+      label: '高刷跟随系统',
+      desc: '清除云控 FPS 名单，高刷跟随系统刷新率设置（下次开机生效）',
+      def: '1'
+    },
+    enable_perf_thermal: {
+      label: '性能热控调优',
+      desc: '停止热控服务，可能影响充电 / 温控（下次开机生效）',
+      def: '0',
+      hot: true
+    },
+    gpu_boost: {
+      label: '禁用 GPU Boost（高通）',
+      desc: 'service.sh 启动时锁定 GPU 节点（下次开机生效）',
+      def: 'false'
+    }
+  };
+
+  /* 与 action.sh 交互菜单 1-8 一一对应（数字即菜单编号） */
+  var ACTION_DEFS = [
+    { id: 1, label: '覆盖 Joyose 云控', cmd: 'joyose' },
+    { id: 2, label: '同步电池优化白名单', cmd: 'sync_battery' },
+    { id: 3, label: 'PowerKeeper 静态保护', cmd: 'powerkeeper', confirm: true },
+    { id: 4, label: '高刷跟随系统刷新率', cmd: 'refresh' },
+    { id: 5, label: '查看当前云控状态', cmd: 'status' },
+    { id: 6, label: '重启 PowerKeeper', cmd: 'restart_pk' },
+    { id: 7, label: '备份云控数据库', cmd: 'backup' },
+    { id: 8, label: '恢复充电', cmd: 'restore_charging', confirm: true, danger: true }
+  ];
+
+  var state = {
+    flags: {},
+    busy: false,
+    refreshing: false
+  };
+
+  var refreshSeq = 0;
+  var logBuffer = '';
+  var destroyed = false;
+  var autoTimer = null;
+
+  /* ---------- 工具 ---------- */
+  function $(id) { return document.getElementById(id); }
+
+  /* moduleInfo() 返回模块信息 JSON（字符串或对象），解析出模块目录 */
+  function getModuleInfo() {
+    try {
+      var raw = api.moduleInfo();
+      if (!raw) return null;
+      return (typeof raw === 'string') ? JSON.parse(raw) : raw;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* 模块目录白名单校验：仅接受标准形态，杜绝路径/命令注入面 */
+  function resolveModuleDir() {
+    var info = getModuleInfo();
+    var dir = '';
+    if (info && info.moduleDir) dir = info.moduleDir;
+    else if (info && info.id) dir = '/data/adb/modules/' + info.id;
+    if (/^\/data\/adb\/modules\/[A-Za-z0-9_.-]+$/.test(dir)) return dir;
+    return '/data/adb/modules/' + FALLBACK_MOD_ID;
+  }
+
+  function stripAnsi(s) {
+    return String(s).replace(/\x1b\[[0-9;]*m/g, '');
+  }
+
+  var logBox = null;
+  function ensureLog() {
+    if (!logBox) logBox = $('log');
+    return logBox;
+  }
+
+  function log(text, cls) {
+    var box = ensureLog();
+    if (!box) return;
+    if (box.querySelector('.log-empty')) box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = 'log-line' + (cls ? ' ' + cls : '');
+    div.textContent = stripAnsi(text);
+    box.appendChild(div);
+    while (box.childElementCount > LOG_MAX_NODES) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function logLine(text) { log(text, 'dim'); }
+  function logOk(text) { log(text, 'ok'); }
+  function logErr(text) { log(text, 'danger'); }
+  function logWarn(text) { log(text, 'warn'); }
+  function logSep() { log('', ''); }
+
+  function clearLog() {
+    var box = ensureLog();
+    if (!box) return;
+    box.innerHTML = '<div class="log-empty">暂无输出，点击上方操作查看实时日志。</div>';
+  }
+
+  /* 仅接受固定模式，避免 innerHTML 注入面 */
+  function setRunStatus(mode) {
+    var el = $('run-status');
+    if (!el) return;
+    el.textContent = '';
+    if (mode === 'busy') {
+      var sp = document.createElement('span');
+      sp.className = 'spinner';
+      el.appendChild(sp);
+      el.appendChild(document.createTextNode('执行中…'));
+    }
+  }
+
+  function toast(msg) { if (api) api.toast(msg); }
+
+  function setControlsDisabled(v) {
+    document.querySelectorAll('.btn, .mini-btn, .switch input').forEach(function (el) {
+      el.disabled = v;
+    });
+  }
+
+  function shCmd(cmd) { return 'sh ' + MOD_DIR + '/action.sh ' + cmd; }
+
+  /* ---------- Tab 切换 ---------- */
+  function switchTab(name) {
+    document.querySelectorAll('#pages .page').forEach(function (p) {
+      p.classList.toggle('active', p.id === 'tab-' + name);
+    });
+    document.querySelectorAll('#tabbar .tab-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.tab === name);
+    });
+  }
+
+  /* ---------- 状态解析 ---------- */
+  function parseStatus(text) {
+    var out = { flags: {}, battery: null, joyose: null, noRestrict: null, hr: null, deviceidle: null, backup: null };
+    var lines = String(text).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var m;
+      /* 只认 TOGGLE_DEFS 中的键；gpu_boost 未设置时归一为 false */
+      if ((m = line.match(/^\s*([a-z_]+)\s*=\s*(\S+)/)) && TOGGLE_DEFS[m[1]]) {
+        out.flags[m[1]] = (m[2] === '(未设置/默认)') ? 'false' : m[2];
+      } else if ((m = line.match(/background_freeze_whitelist 数量:\s*(\d+)/))) {
+        out.joyose = m[1];
+      } else if ((m = line.match(/userTable noRestrict 数量:\s*(\d+)/))) {
+        out.noRestrict = m[1];
+      } else if ((m = line.match(/highRefreshRateTable 数量:\s*(\d+)/))) {
+        out.hr = m[1];
+      } else if ((m = line.match(/deviceidle user 白名单数量:\s*(\d+)/))) {
+        out.deviceidle = m[1];
+      } else if ((m = line.match(/battery: status=(.+?) capacity=(\S+)% temp=(\S+) current=(\S+)uA voltage=(\S+)uV/))) {
+        out.battery = { status: m[1].trim(), capacity: m[2], temp: m[3], current: m[4], voltage: m[5] };
+      } else if ((m = line.match(/^(cloud_configure|user_configure|joyose_teg|highrefreshrate)_\d{8}-\d{6}_/))) {
+        out.backup = (parseInt(out.backup || '0', 10) + 1).toString();
+      }
+    }
+    return out;
+  }
+
+  function renderOverview(s) {
+    var batt = $('s-battery');
+    if (batt) {
+      if (s.battery) {
+        var t = parseInt(s.battery.temp, 10);
+        var cap = parseInt(s.battery.capacity, 10);
+        if (isNaN(t)) t = 0;
+        if (isNaN(cap)) cap = 0;
+        var cls = 'ok';
+        if (t >= 400) cls = 'warn';
+        if (cap <= 15) cls = 'danger';
+        batt.className = 'v ' + cls;
+        batt.textContent =
+          s.battery.status + ' · ' + s.battery.capacity + '% · ' +
+          (t / 10).toFixed(1) + '°C';
+        batt.title = '电流 ' + s.battery.current + 'uA · 电压 ' + s.battery.voltage + 'uV';
+      } else {
+        batt.className = 'v';
+        batt.textContent = '-';
+        batt.title = '';
+      }
+    }
+    setStat('s-joyose', s.joyose);
+    setStat('s-norestrict', s.noRestrict);
+    setStat('s-hr', s.hr);
+    setStat('s-deviceidle', s.deviceidle);
+    setStat('s-backup', s.backup);
+    var t2 = $('overview-time');
+    if (t2) t2.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  }
+
+  function setStat(id, val) {
+    var el = $(id);
+    if (!el) return;
+    el.className = 'v';
+    el.textContent = (val == null || val === '') ? '-' : val;
+  }
+
+  /* ---------- 开关 ---------- */
+  function renderToggles(flags) {
+    var wrap = $('toggles');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    Object.keys(TOGGLE_DEFS).forEach(function (key) {
+      var def = TOGGLE_DEFS[key];
+      var val = flags[key] != null ? flags[key] : def.def;
+      state.flags[key] = val;
+
+      var row = document.createElement('div');
+      row.className = 'toggle-row';
+
+      var txt = document.createElement('div');
+      txt.className = 'txt';
+      var name = document.createElement('div');
+      name.className = 't-name';
+      name.textContent = def.label;
+      if (def.hot) {
+        var tag = document.createElement('span');
+        tag.className = 'tag hot';
+        tag.textContent = '风险';
+        name.appendChild(tag);
+      }
+      var desc = document.createElement('div');
+      desc.className = 't-desc';
+      desc.textContent = def.desc;
+      txt.appendChild(name);
+      txt.appendChild(desc);
+
+      var sw = document.createElement('label');
+      sw.className = 'switch';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = (val === '1' || val === 'true');
+      if (state.busy) input.disabled = true;
+      input.addEventListener('change', function () {
+        setToggle(key, input.checked, input);
+      });
+      var track = document.createElement('span');
+      track.className = 'track';
+      var thumb = document.createElement('span');
+      thumb.className = 'thumb';
+      sw.appendChild(input);
+      sw.appendChild(track);
+      sw.appendChild(thumb);
+
+      row.appendChild(txt);
+      row.appendChild(sw);
+      wrap.appendChild(row);
+    });
+  }
+
+  function setToggle(key, checked, input) {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      input.checked = !checked;
+      return;
+    }
+    var def = TOGGLE_DEFS[key];
+    var newVal = (def.def === 'true' || def.def === 'false') ? (checked ? 'true' : 'false') : (checked ? '1' : '0');
+
+    if (def.hot && checked) {
+      if (!window.confirm('开启「' + def.label + '」可能影响充电/温控，确认继续？（下次开机生效）')) {
+        input.checked = false;
+        return;
+      }
+    }
+
+    input.disabled = true;
+    logWarn('[config] 设置 ' + key + '=' + newVal);
+    api.exec(shCmd('config_set ' + key + ' ' + newVal))
+      .then(function (res) {
+        if (destroyed) return;
+        if (res.errno !== 0) {
+          logErr(res.stderr || ('config_set 失败 (errno=' + res.errno + ')'));
+          if (input.isConnected) {
+            input.disabled = false;
+            input.checked = !checked;
+          }
+          toast('设置失败');
+          return;
+        }
+        state.flags[key] = newVal;
+        if (input.isConnected) input.disabled = false;
+        if (res.stdout) logLine(res.stdout.trim());
+        toast(key + ' = ' + newVal);
+        setTimeout(refreshStatus, REFRESH_DELAY_MS);
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        if (input.isConnected) {
+          input.disabled = false;
+          input.checked = !checked;
+        }
+        logErr('config_set 异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  /* ---------- 快捷操作 ---------- */
+  function renderActions() {
+    var wrap = $('actions');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    ACTION_DEFS.forEach(function (a) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn' + (a.danger ? ' danger' : '');
+      btn.dataset.cmd = a.cmd;
+      btn.dataset.confirm = a.confirm ? '1' : '0';
+      var num = document.createElement('span');
+      num.className = 'b-num';
+      num.textContent = a.id;
+      btn.appendChild(num);
+      btn.appendChild(document.createTextNode(a.label));
+      btn.addEventListener('click', function () { runAction(btn); });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function runAction(btn) {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      return;
+    }
+    if (btn.dataset.confirm === '1') {
+      if (!window.confirm('确认执行「' + btn.textContent.replace(/^\d+/, '').trim() + '」？')) return;
+    }
+    state.busy = true;
+    setControlsDisabled(true);
+    btn.classList.add('busy');
+    setRunStatus('busy');
+    logSep();
+    logWarn('$ ' + shCmd(btn.dataset.cmd));
+
+    var settled = false;
+    var watchdog = null;
+    function settle(ok) {
+      if (settled) return;
+      settled = true;
+      if (watchdog) clearTimeout(watchdog);
+      flushLog();
+      state.busy = false;
+      setControlsDisabled(false);
+      btn.classList.remove('busy');
+      setRunStatus('');
+      if (ok) {
+        logOk('完成 ✓');
+        toast('执行完成');
+        setTimeout(refreshStatus, REFRESH_DELAY_MS);
+        setTimeout(refreshBackups, REFRESH_DELAY_MS);
+      } else {
+        logErr('执行失败 ✗');
+        toast('执行失败');
+      }
+    }
+
+    var child = api.spawn('sh', [MOD_DIR + '/action.sh', btn.dataset.cmd]);
+    watchdog = setTimeout(function () {
+      if (!settled) {
+        logErr('执行超时（' + Math.round(SPAWN_TIMEOUT_MS / 1000) + 's），已复位');
+        settle(false);
+      }
+    }, SPAWN_TIMEOUT_MS);
+
+    child.stdout.on('data', function (chunk) { chunkToLog(chunk, false); });
+    child.stderr.on('data', function (chunk) { chunkToLog(chunk, true); });
+    child.on('error', function (e) {
+      logErr('执行失败: ' + ((e && e.message) || e));
+      settle(false);
+    });
+    child.on('exit', function (code) {
+      settle(code === 0);
+    });
+  }
+
+  /* 跨 chunk 行缓冲：chunk 边界不截断半行 */
+  function chunkToLog(chunk, isErr) {
+    logBuffer += String(chunk).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var lines = logBuffer.split('\n');
+    logBuffer = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/\r$/, '');
+      if (line.trim() !== '') log(line, isErr ? 'warn' : '');
+    }
+  }
+
+  function flushLog() {
+    var rest = logBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    logBuffer = '';
+    if (rest.trim() !== '') log(rest, '');
+  }
+
+  /* ---------- 状态刷新 ---------- */
+  function refreshStatus() {
+    if (destroyed || state.busy || state.refreshing) return;
+    state.refreshing = true;
+    var seq = ++refreshSeq;
+    var btn = $('btn-refresh-status');
+    if (btn) btn.disabled = true;
+    var t0 = Date.now();
+    api.exec(shCmd('status'))
+      .then(function (res) {
+        if (destroyed || seq !== refreshSeq) return;
+        if (res.errno !== 0) {
+          logErr(res.stderr || ('自检失败 errno=' + res.errno));
+          renderToggles(state.flags);
+          var t2 = $('overview-time');
+          if (t2) t2.textContent = '刷新失败 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+          toast('自检失败');
+          return;
+        }
+        var s = parseStatus(res.stdout);
+        state.flags = s.flags;
+        renderOverview(s);
+        renderToggles(s.flags);
+        logLine('[status] 刷新完成（' + ((Date.now() - t0) / 1000).toFixed(1) + 's）');
+      })
+      .catch(function (e) {
+        if (destroyed || seq !== refreshSeq) return;
+        renderToggles(state.flags);
+        logErr('自检异常: ' + ((e && e.message) || e));
+      })
+      .then(function () {
+        if (destroyed) return;
+        if (seq === refreshSeq) {
+          state.refreshing = false;
+          var b2 = $('btn-refresh-status');
+          if (b2) b2.disabled = false;
+        }
+      });
+  }
+
+  /* ---------- 备份管理 ---------- */
+  function fmtSize(n) {
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + 'MB';
+    if (n >= 1024) return (n / 1024).toFixed(1) + 'KB';
+    return n + 'B';
+  }
+
+  function refreshBackups() {
+    var listEl = $('backup-list');
+    var sumEl = $('backup-summary');
+    if (!listEl || !sumEl) return;
+    api.exec(shCmd('backup_list'))
+      .then(function (res) {
+        if (destroyed) return;
+        var files = [];
+        String(res.stdout).split('\n').forEach(function (line) {
+          var m = line.match(/^(.+?)\t(\d+)$/);
+          if (m) files.push({ name: m[1], size: parseInt(m[2], 10) });
+        });
+        sumEl.textContent = files.length ? files.length + ' 份' : '';
+        listEl.innerHTML = '';
+        if (!files.length) {
+          listEl.innerHTML = '<span class="log-empty">暂无备份</span>';
+          return;
+        }
+        files.forEach(function (f) {
+          var row = document.createElement('div');
+          row.className = 'backup-item';
+          var name = document.createElement('span');
+          name.className = 'b-name';
+          name.textContent = f.name;
+          name.title = f.name;
+          var size = document.createElement('span');
+          size.className = 'b-size';
+          size.textContent = fmtSize(f.size);
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'b-del';
+          del.textContent = '删除';
+          del.addEventListener('click', function () { deleteBackup(f.name, del); });
+          row.appendChild(name);
+          row.appendChild(size);
+          row.appendChild(del);
+          listEl.appendChild(row);
+        });
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        listEl.innerHTML = '<span class="log-empty">读取备份失败</span>';
+        logErr('备份列表异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  function deleteBackup(name, delBtn) {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      return;
+    }
+    if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
+      logErr('非法备份文件名，已拒绝: ' + name);
+      return;
+    }
+    if (!window.confirm('确认删除备份 ' + name + ' ？')) return;
+    delBtn.disabled = true;
+    api.exec(shCmd('backup_delete ' + name))
+      .then(function (res) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || '删除失败');
+          toast('删除失败');
+          return;
+        }
+        if (res.stdout) logLine(res.stdout.trim());
+        toast('已删除');
+        refreshBackups();
+        setTimeout(refreshStatus, REFRESH_DELAY_MS);
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        logErr('删除异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  /* ---------- 日志导出 ---------- */
+  function collectLogText() {
+    var box = ensureLog();
+    if (!box) return '';
+    var parts = [];
+    box.querySelectorAll('.log-line').forEach(function (s) {
+      if (s.classList.contains('log-empty')) return;
+      parts.push(s.textContent);
+    });
+    return parts.join('\n');
+  }
+
+  function exportLog() {
+    var text = collectLogText();
+    if (!text) {
+      toast('日志为空');
+      return;
+    }
+    var btn = $('btn-export-log');
+    if (!btn) return;
+    btn.disabled = true;
+    var now = new Date();
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var ts = '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
+      '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) +
+      '-' + Math.random().toString(36).slice(2, 6);
+    var path = '/sdcard/Download/HyperOS-3CO_日志_' + ts + '.txt';
+    var delim = 'KSULOG_EOF_' + Math.random().toString(36).slice(2, 10);
+    var cmd = "cat > '" + path + "' <<'" + delim + "'\n" + text + "\n" + delim;
+
+    api.exec(cmd)
+      .then(function (res) {
+        if (destroyed) return;
+        btn.disabled = false;
+        if (res.errno !== 0) {
+          logErr('导出失败: ' + (res.stderr || ('errno=' + res.errno)));
+          toast('导出失败');
+          return;
+        }
+        logOk('日志已导出: ' + path);
+        toast('已导出到 Download');
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        btn.disabled = false;
+        logErr('导出异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  /* ---------- 模块信息 ---------- */
+  function loadModuleInfo() {
+    var info = getModuleInfo();
+    if (!info) return;
+    if (info.name) document.querySelector('header h1').textContent = info.name;
+    var v = info.versionCode || info.version;
+    if (v) $('version-chip').textContent = 'v' + v;
+  }
+
+  /* ---------- 主题切换 ---------- */
+  var THEME_KEY = 'asphyxia_theme';
+  var THEME_ICONS = {
+    light: 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39-.39.39-1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z',
+    dark: 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z'
+  };
+  function getThemePref() {
+    try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { return 'auto'; }
+  }
+  function applyTheme(t) {
+    var root = document.documentElement;
+    if (t === 'dark') root.setAttribute('data-theme', 'dark');
+    else if (t === 'light') root.setAttribute('data-theme', 'light');
+    else root.removeAttribute('data-theme');
+    /* 图标显示「再次点击后将切换到的主题」：当前 light（下次点击→dark）显示月亮；
+       否则（dark→auto / auto→light）显示太阳 */
+    var icon = $('theme-icon');
+    if (icon) {
+      icon.setAttribute('d', (t === 'light') ? THEME_ICONS.dark : THEME_ICONS.light);
+    }
+  }
+  function cycleTheme() {
+    var cur = getThemePref();
+    var next = cur === 'auto' ? 'light' : (cur === 'light' ? 'dark' : 'auto');
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
+    applyTheme(next);
+  }
+
+  /* ---------- 初始化 ---------- */
+  function init() {
+    if (!api) {
+      $('banner').classList.add('show');
+      $('module-sub').textContent = '桥接脚本缺失，请重装模块';
+      return;
+    }
+
+    MOD_DIR = resolveModuleDir();
+    var info = getModuleInfo();
+    var sub = MOD_DIR;
+    if (info && (info.enabled === true || info.enabled === 'true')) sub += ' · 已启用';
+    $('module-sub').textContent = sub;
+
+    if (!api.available) {
+      $('banner').classList.add('show');
+      $('module-sub').textContent = MOD_DIR + '（桥不可用）';
+      return;
+    }
+
+    renderActions();
+    document.querySelectorAll('#tabbar .tab-btn').forEach(function (b) {
+      b.addEventListener('click', function () { switchTab(b.dataset.tab); });
+    });
+    var btnClear = $('btn-clear-log');
+    if (btnClear) btnClear.addEventListener('click', clearLog);
+    var btnRefresh = $('btn-refresh-status');
+    if (btnRefresh) btnRefresh.addEventListener('click', refreshStatus);
+    var btnExport = $('btn-export-log');
+    if (btnExport) btnExport.addEventListener('click', exportLog);
+    var btnTheme = $('btn-theme');
+    if (btnTheme) btnTheme.addEventListener('click', cycleTheme);
+    applyTheme(getThemePref());
+    /* auto 模式下跟随系统主题实时变化 */
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+        if (getThemePref() === 'auto') applyTheme('auto');
+      });
+    }
+
+    window.addEventListener('pagehide', function () {
+      destroyed = true;
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+      }
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+        }
+      } else if (!autoTimer && !destroyed) {
+        autoTimer = setInterval(autoRefresh, AUTO_REFRESH_MS);
+      }
+    });
+
+    loadModuleInfo();
+    refreshStatus();
+    refreshBackups();
+    autoTimer = setInterval(autoRefresh, AUTO_REFRESH_MS);
+  }
+
+  function autoRefresh() {
+    if (!state.busy && !state.refreshing && !destroyed) refreshStatus();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();

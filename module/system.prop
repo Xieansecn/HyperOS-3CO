@@ -1,0 +1,31 @@
+# Gaming
+debug.game.video.support=true
+ro.vendor.gpp.frc.support=true
+ro.vendor.xiaomi.sr.support=true
+ro.vendor.media.video.frc.support=true
+ro.vendor.media.video.vpp.support=true
+
+# Haptics
+sys.haptic.lowPowerMode=false
+sys.haptic.BCLMode=false
+sys.haptic.slide_version=1.0
+sys.haptic.onetrack=false
+ro.odm.mm.vibrator.lowPowerMode=false
+
+# Audio
+ro.audio.ullunique=true
+vendor.audio.ull.playback.support=true
+
+# Prefetchers
+persist.sys.precache.enable=false
+persist.sys.preload.enable=false
+persist.sys.prestart.feedback.enable=false
+persist.sys.prestart.proc=false
+
+# Display
+persist.sys.smartpower.display_camera_for_mid_to_low_end_devices_enable=false
+persist.sys.smartpower.limit.max.refresh.rate=-1
+persist.sys.smartpower.limit.normal.max.refresh.rate.enable=false
+persist.sys.flingpromotion.enable=0
+ro.vendor.perf.scroll_opt=1
+persist.sys.mi.prerender=false

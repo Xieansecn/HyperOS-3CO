@@ -1,0 +1,11 @@
+# 构建产物
+*.zip
+
+# 真机运行时生成的目录/文件
+module/config/
+
+# 开发产物
+*.log
+*.sql
+dryrun/
+simjoyose/

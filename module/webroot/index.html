@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>HyperOS-3CO</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="ksu.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <h1 id="app-title">HyperOS-3CO</h1>
+        <div class="sub" id="module-sub">加载中…</div>
+      </div>
+      <div class="header-actions">
+        <span class="chip" id="version-chip">-</span>
+        <button type="button" class="icon-btn" id="btn-theme" title="切换主题" aria-label="切换主题">
+          <svg viewBox="0 0 24 24" id="theme-icon">
+            <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner">
+      未检测到 KernelSU WebUI 桥（window.ksu）。请在 KernelSU 管理器的模块页面打开本界面。
+    </div>
+
+    <main id="pages">
+      <!-- ============ 状态 ============ -->
+      <section class="page active" id="tab-status">
+        <div class="card">
+          <div class="card-title">
+            <span>概览</span>
+            <span class="hint" id="overview-time"></span>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="k">电池</div><div class="v" id="s-battery">-</div></div>
+            <div class="stat"><div class="k">Joyose 冻结白名单</div><div class="v" id="s-joyose">-</div></div>
+            <div class="stat"><div class="k">电池白名单 (noRestrict)</div><div class="v" id="s-norestrict">-</div></div>
+            <div class="stat"><div class="k">高刷名单</div><div class="v" id="s-hr">-</div></div>
+            <div class="stat"><div class="k">deviceidle 白名单</div><div class="v" id="s-deviceidle">-</div></div>
+            <div class="stat"><div class="k">云控备份</div><div class="v" id="s-backup">-</div></div>
+          </div>
+        </div>
+        <button type="button" class="mini-btn full" id="btn-refresh-status">刷新状态</button>
+      </section>
+
+      <!-- ============ 开关 ============ -->
+      <section class="page" id="tab-toggles">
+        <div class="card">
+          <div class="card-title"><span>开关（config/ 持久化）</span></div>
+          <div id="toggles"></div>
+        </div>
+      </section>
+
+      <!-- ============ 操作 ============ -->
+      <section class="page" id="tab-actions">
+        <div class="card">
+          <div class="card-title">
+            <span>快捷操作</span>
+            <span class="hint">联动 action.sh 菜单 1-8</span>
+          </div>
+          <div class="actions" id="actions"></div>
+          <div class="dial-hint">
+            恢复充电提示：拨号盘输入 <b>*#*#76937#*#*</b> 可手动触发 PowerKeeper 云控拉取（CloudUpdateReceiver）
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span>备份管理</span>
+            <span class="hint" id="backup-summary"></span>
+          </div>
+          <div id="backup-list"><div class="log-empty">加载中…</div></div>
+        </div>
+      </section>
+
+      <!-- ============ 日志 ============ -->
+      <section class="page" id="tab-logs">
+        <div class="log-tools">
+          <span class="hint" id="run-status"></span>
+          <button type="button" class="mini-btn" id="btn-export-log">导出 txt</button>
+          <button type="button" class="mini-btn" id="btn-clear-log">清空</button>
+        </div>
+        <div class="log-box" id="log"><div class="log-empty">暂无输出，点击上方操作查看实时日志。</div></div>
+      </section>
+    </main>
+
+    <nav id="tabbar">
+      <button type="button" class="tab-btn active" data-tab="status">
+        <svg class="tab-icon" viewBox="0 0 24 24"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>
+        <span>状态</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="toggles">
+        <svg class="tab-icon" viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+        <span>开关</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="actions">
+        <svg class="tab-icon" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg>
+        <span>操作</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="logs">
+        <svg class="tab-icon" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+        <span>日志</span>
+      </button>
+    </nav>
+  </div>
+</body>
+</html>
