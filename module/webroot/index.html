@@ -16,6 +16,7 @@
         <div class="sub" id="module-sub">加载中…</div>
       </div>
       <div class="header-actions">
+        <span class="hdr-spinner" id="hdr-spinner" title="执行中"></span>
         <span class="chip" id="version-chip">-</span>
         <button type="button" class="icon-btn" id="btn-restart" title="重启" aria-label="重启">
           <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
@@ -33,24 +34,33 @@
     </div>
 
     <main id="pages">
-      <!-- ============ 状态 ============ -->
+      <!-- ============ 状态（M3 仪表盘） ============ -->
       <section class="page active" id="tab-status">
-        <div class="card">
-          <div class="card-title">
-            <span>概览</span>
-            <span class="hint" id="overview-time"></span>
-            <button type="button" class="icon-btn sm" id="btn-refresh-status" title="刷新状态" aria-label="刷新状态">
-              <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-            </button>
+        <div class="dashboard-grid">
+          <div class="hero-card">
+            <div class="hero-content">
+              <span class="hero-greeting" id="hero-greeting">HyperOS-3CO</span>
+              <span class="hero-value" id="s-battery"><span class="skeleton" style="height:38px;width:70%"></span></span>
+              <span class="hero-subtitle" id="hero-subtitle">加载中…</span>
+            </div>
           </div>
-          <div class="stats">
-            <div class="stat"><div class="k">电池</div><div class="v" id="s-battery">-</div></div>
-            <div class="stat"><div class="k">Joyose 冻结白名单</div><div class="v" id="s-joyose">-</div></div>
-            <div class="stat"><div class="k">电池白名单 (noRestrict)</div><div class="v" id="s-norestrict">-</div></div>
-            <div class="stat"><div class="k">高刷名单</div><div class="v" id="s-hr">-</div></div>
-            <div class="stat"><div class="k">deviceidle 白名单</div><div class="v" id="s-deviceidle">-</div></div>
-            <div class="stat"><div class="k">云控备份</div><div class="v" id="s-backup">-</div></div>
-            <div class="stat"><div class="k">息屏冻结</div><div class="v" id="s-freeze">-</div></div>
+          <div class="metrics-row">
+            <div class="metric-card"><span class="metric-value" id="s-joyose"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">Joyose 冻结白名单</span></div>
+            <div class="metric-card"><span class="metric-value" id="s-norestrict"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">电池白名单 (noRestrict)</span></div>
+            <div class="metric-card"><span class="metric-value" id="s-hr"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">高刷名单</span></div>
+            <div class="metric-card"><span class="metric-value" id="s-deviceidle"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">deviceidle 白名单</span></div>
+            <div class="metric-card"><span class="metric-value" id="s-backup"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">云控备份</span></div>
+            <div class="metric-card"><span class="metric-value" id="s-freeze"><span class="skeleton" style="height:24px;width:50%"></span></span><span class="metric-label">息屏冻结</span></div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-head">
+              <div class="card-title">状态</div>
+              <button type="button" class="icon-btn sm" id="btn-refresh-status" title="刷新状态" aria-label="刷新状态">
+                <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              </button>
+            </div>
+            <div class="info-row"><span class="info-key">更新时间</span><span class="info-val" id="overview-time">—</span></div>
+            <div class="info-row"><span class="info-key">运行目录</span><span class="info-val" id="info-dir">—</span></div>
           </div>
         </div>
       </section>
@@ -58,7 +68,7 @@
       <!-- ============ 配置 ============ -->
       <section class="page" id="tab-config">
         <div class="config-note">
-          以下为持久化配置，写入 <b>/data/adb/modules/HyperOS-3CO/config/*.conf</b>，重启后生效（可在操作页即时触发对应功能）
+          以下为持久化开机配置，写入 <b id="config-path">…</b>（每个开关一个文件，无扩展名），重启后自动应用；可随时在「操作」页即时触发对应功能
         </div>
         <div class="card">
           <div class="card-title"><span>配置</span></div>
@@ -82,6 +92,9 @@
           <div class="card-title">
             <span>备份管理</span>
             <span class="hint" id="backup-summary"></span>
+            <button type="button" class="icon-btn sm" id="btn-backup-refresh" title="刷新备份" aria-label="刷新备份">
+              <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
           </div>
           <div id="backup-list"><div class="log-empty">加载中…</div></div>
         </div>
@@ -99,9 +112,12 @@
           </div>
           <div class="wls-desc" id="wls-desc"></div>
           <div class="wls-tabs" id="wls-tabs"></div>
-          <div class="wls-search-row">
-            <svg class="wls-search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <div class="wls-search-bar">
+            <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
             <input type="text" class="wl-input" id="wls-search" placeholder="搜索包名过滤…" />
+          </div>
+          <div class="wls-add-bar">
+            <svg class="add-icon" viewBox="0 0 24 24" width="20" height="20"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
             <input type="text" class="wl-input" id="wls-input" placeholder="添加包名，如 com.tencent.mm" />
             <button type="button" class="mini-btn" id="wls-add-btn">添加</button>
           </div>
@@ -125,6 +141,18 @@
         </div>
       </section>
     </main>
+
+    <!-- 页内确认对话框（替代原生 confirm：不阻塞 JS 线程，兼容不支持 JS 对话框的管理器） -->
+    <div class="dlg-overlay" id="confirm-dlg">
+      <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-text">
+        <div class="dlg-title" id="dlg-title">确认操作</div>
+        <div class="dlg-text" id="dlg-text"></div>
+        <div class="dlg-actions">
+          <button type="button" class="dlg-btn" id="dlg-cancel">取消</button>
+          <button type="button" class="dlg-btn" id="dlg-ok">确定</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 重启菜单 -->
     <div class="sheet-overlay" id="restart-sheet">

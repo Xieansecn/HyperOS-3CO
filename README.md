@@ -1,6 +1,6 @@
 # HyperOS-3CO
 
-> 版本：v14（260825）｜作者：Xieansecn & Deepseek Harness & 酷安「苏疫杆菌」
+> 版本：v14（260826）｜作者：Xieansecn & Deepseek Harness & 酷安「苏疫杆菌」
 
 基于酷安作者「苏疫杆菌」模块原型二改的 **MIUI / HyperOS Joyose 云控定制模块**，适配 Redmi K70 Pro（manet）。
 
@@ -14,6 +14,7 @@
 - **PowerKeeper 静态保护**：把所有第三方应用写入 `noRestrict` 与多级白名单，减少后台冻结
 - **高刷跟随系统**：清除云控 FPS 强制名单，让高刷跟随系统刷新率设置
 - **息屏冻结（省电）**：把非豁免三方应用切为可冻结态，息屏后由 PowerKeeper 冻结/清理（B 站等默认不豁免，解决夜间偷跑耗电）；**即时恢复**一键解除冻结，独立于恢复充电
+- **一键还原（清理式）**：撤销模块写入的限制/冻结、恢复云控接收器，让官方云控重新拉取；不清手机管家数据、不写回备份
 - **恢复充电**：一键恢复热控服务、解除节点屏蔽、重读本地云控（保持防冻结定制不丢失）
 - **数据安全**：所有写库前自动备份（保留最近 5 份），WebUI 内可查看与删除备份
 
@@ -40,14 +41,15 @@ KernelSU 管理器 → 模块 → HyperOS-3CO → 打开 WebUI：
 ## 命令行入口
 
 ```sh
-sh /data/adb/modules/HyperOS-3CO/action.sh <命令>
+sh /data/adb/modules/HyperOS-3CO/scripts/api.sh <命令>
 # joyose | sync_battery | powerkeeper | refresh | status
-# restart_pk | backup | restore_charging | freeze | unfreeze
+# restart_pk | backup | restore_charging | freeze | unfreeze | reset
 # config | config_get <key> | config_set <key> <值>
+# wl_sys_list <名单> | wl_sys_add <名单> <包名> | wl_sys_remove <名单> <包名>
 # backup_list | backup_delete <文件名> | version | help
 ```
 
-无参数时进入音量键交互菜单。
+KernelSU 模块列表里的 action 按钮（`action.sh`）则是音量键交互菜单。
 
 ## 适配机型
 
@@ -63,7 +65,7 @@ sh /data/adb/modules/HyperOS-3CO/action.sh <命令>
 ## 开发
 
 ```sh
-sh build_module.sh    # 打包 -> HyperOS-3CO-260825(manet).zip
+sh build_module.sh    # 打包 -> HyperOS-3CO-260826(manet).zip
 sh verify_module.sh   # 语法 / JSON / 权限 / zip 全量校验
 python3 db_inspect.py # 只读查看云控数据库
 ```

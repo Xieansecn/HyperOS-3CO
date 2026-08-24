@@ -8,7 +8,7 @@
   var MOD_DIR = '/data/adb/modules/' + FALLBACK_MOD_ID;
   var AUTO_REFRESH_MS = 60000;
   var REFRESH_DELAY_MS = 500;
-  var SPAWN_TIMEOUT_MS = 300000;
+  var SPAWN_TIMEOUT_MS = 90000;
   var LOG_MAX_NODES = 1600;
 
   /* 8 个开关 + 定时窗口，与 action.sh CONFIG_KEYS / check_status.sh 输出对应 */
@@ -71,12 +71,12 @@
     { id: 7, label: '备份云控数据库', cmd: 'backup' },
     { id: 8, label: '恢复充电', cmd: 'restore_charging', confirm: true, danger: true },
     { id: 9, label: '息屏冻结（立即）', cmd: 'freeze', confirm: true },
-    { id: 10, label: '即时恢复', cmd: 'unfreeze', confirm: true, danger: true }
+    { id: 10, label: '即时恢复', cmd: 'unfreeze', confirm: true, danger: true },
+    { id: 11, label: '一键还原（清理式），让云控重拉', cmd: 'reset', confirm: true, danger: true }
   ];
 
   var state = {
     flags: {},
-    busy: false,
     refreshing: false
   };
 
@@ -123,6 +123,8 @@
     var box = ensureLog();
     if (!box) return;
     if (box.querySelector('.log-empty')) box.innerHTML = '';
+    /* 仅当用户已贴近底部时才自动跟随，避免回看历史日志被拽到最末行 */
+    var nearBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 48;
     var div = document.createElement('div');
     div.className = 'log-line' + (cls ? ' ' + cls : '');
     var now = new Date();
@@ -130,7 +132,7 @@
     div.textContent = '[' + p2(now.getHours()) + ':' + p2(now.getMinutes()) + ':' + p2(now.getSeconds()) + '] ' + stripAnsi(text);
     box.appendChild(div);
     while (box.childElementCount > LOG_MAX_NODES) box.removeChild(box.firstChild);
-    box.scrollTop = box.scrollHeight;
+    if (nearBottom) box.scrollTop = box.scrollHeight;
   }
 
   function logLine(text) { log(text, 'dim'); }
@@ -145,12 +147,19 @@
     box.innerHTML = '<div class="log-empty">暂无输出，点击上方操作查看实时日志。</div>';
   }
 
-  /* 仅接受固定模式，避免 innerHTML 注入面 */
+  /* 全局执行中指示：计数式，end 并发执行(重启/白名单/动作)不会互相清除；
+     busy 递增，'' 递减到 0 才隐藏顶栏/日志页 spinner */
+  var busyCount = 0;
   function setRunStatus(mode) {
+    if (mode === 'busy') busyCount++;
+    else if (mode === '') busyCount = busyCount > 0 ? busyCount - 1 : 0;
+    var active = busyCount > 0;
+    var hdr = document.querySelector('header');
+    if (hdr) hdr.classList.toggle('busy', active);
     var el = $('run-status');
     if (!el) return;
     el.textContent = '';
-    if (mode === 'busy') {
+    if (active) {
       var sp = document.createElement('span');
       sp.className = 'spinner';
       el.appendChild(sp);
@@ -160,7 +169,48 @@
 
   function toast(msg) { if (api) api.toast(msg); }
 
-  function shCmd(cmd) { return 'sh ' + MOD_DIR + '/action.sh ' + cmd; }
+  /* ---------- 页内确认对话框（替代原生 confirm：不阻塞 JS 线程，兼容 KsuWebUIStandalone 等不支持 JS 对话框的实现） ---------- */
+  var dlgQueue = [];
+  var dlgActive = false;
+  var dlgCurrent = null;
+
+  function uiConfirm(text, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      dlgQueue.push({ text: text, opts: opts, resolve: resolve });
+      pumpConfirm();
+    });
+  }
+
+  function pumpConfirm() {
+    if (dlgActive || !dlgQueue.length) return;
+    dlgActive = true;
+    var req = dlgQueue.shift();
+    var overlay = $('confirm-dlg');
+    if (!overlay) { dlgActive = false; req.resolve(false); pumpConfirm(); return; }
+    dlgCurrent = req;
+    $('dlg-text').textContent = req.text;
+    var okBtn = $('dlg-ok');
+    if (okBtn) {
+      okBtn.textContent = req.opts.okText || '确定';
+      okBtn.classList.toggle('danger', !!req.opts.danger);
+    }
+    overlay.classList.add('show');
+  }
+
+  function settleConfirm(result) {
+    if (!dlgCurrent) return;
+    var req = dlgCurrent;
+    dlgCurrent = null;
+    var overlay = $('confirm-dlg');
+    if (overlay) overlay.classList.remove('show');
+    dlgActive = false;
+    req.resolve(result);
+    pumpConfirm();
+  }
+
+  /* 所有后端命令统一经 scripts/api.sh 分发（非阻塞入口），不直接拼系统命令 */
+  function shCmd(cmd) { return 'sh ' + MOD_DIR + '/scripts/api.sh ' + cmd; }
 
   /* ---------- Tab 切换 ---------- */
   function switchTab(name) {
@@ -223,17 +273,17 @@
         var cap = parseInt(s.battery.capacity, 10);
         if (isNaN(t)) t = 0;
         if (isNaN(cap)) cap = 0;
-        var cls = 'ok';
-        if (t >= 400) cls = 'warn';
-        if (cap <= 15) cls = 'danger';
-        batt.className = 'v ' + cls;
+        var cls = '';
+        if (t >= 400) cls = ' warn';
+        if (cap <= 15) cls = ' danger';
+        batt.className = 'hero-value' + cls;
         batt.textContent =
           s.battery.status + ' · ' + s.battery.capacity + '% · ' +
           (t / 10).toFixed(1) + '°C';
         batt.title = '电流 ' + s.battery.current + 'uA · 电压 ' + s.battery.voltage + 'uV';
       } else {
-        batt.className = 'v';
-        batt.textContent = '-';
+        batt.className = 'hero-value';
+        batt.textContent = '—';
         batt.title = '';
       }
     }
@@ -250,14 +300,34 @@
   function setStat(id, val) {
     var el = $(id);
     if (!el) return;
-    el.className = 'v';
-    el.textContent = (val == null || val === '') ? '-' : val;
+    el.className = 'metric-value';
+    el.textContent = (val == null || val === '') ? '—' : val;
   }
 
   /* ---------- 开关 ---------- */
+  var lastToggleSig = '';
   function renderToggles(flags) {
     var wrap = $('toggles');
     if (!wrap) return;
+    /* 开关区签名：状态未变时跳过重建，避免自动刷新打断交互/闪烁；pending 写入的开关也能保持禁用态 */
+    var sig = Object.keys(TOGGLE_DEFS).map(function (k) {
+      return k + '=' + (flags[k] != null ? flags[k] : TOGGLE_DEFS[k].def);
+    }).join('&') + '|' + (flags.freezeStart || flags.freeze_start_time || '') + '|' + (flags.freezeEnd || flags.freeze_end_time || '');
+    if (sig === lastToggleSig && wrap.childElementCount > 0) {
+      Object.keys(TOGGLE_DEFS).forEach(function (key) {
+        state.flags[key] = flags[key] != null ? flags[key] : TOGGLE_DEFS[key].def;
+      });
+      return;
+    }
+    /* 用户正在时间输入框聚焦编辑时，即使状态变化也先不重建，避免输入被打断；失焦后下次刷新再收敛 */
+    var ae = document.activeElement;
+    if (ae && wrap.contains(ae) && ae.className === 'time-input') {
+      Object.keys(TOGGLE_DEFS).forEach(function (key) {
+        state.flags[key] = flags[key] != null ? flags[key] : TOGGLE_DEFS[key].def;
+      });
+      return;
+    }
+    lastToggleSig = sig;
     wrap.innerHTML = '';
     Object.keys(TOGGLE_DEFS).forEach(function (key) {
       var def = TOGGLE_DEFS[key];
@@ -383,12 +453,16 @@
     var newVal = (def.def === 'true' || def.def === 'false') ? (checked ? 'true' : 'false') : (checked ? '1' : '0');
 
     if (def.hot && checked) {
-      if (!window.confirm('开启「' + def.label + '」可能影响充电/温控，确认继续？')) {
-        input.checked = false;
-        return;
-      }
+      uiConfirm('开启「' + def.label + '」可能影响充电/温控，确认继续？', { okText: '开启', danger: true }).then(function (ok) {
+        if (!ok) { if (input.isConnected) input.checked = false; return; }
+        applyToggle(key, checked, input, newVal);
+      });
+      return;
     }
+    applyToggle(key, checked, input, newVal);
+  }
 
+  function applyToggle(key, checked, input, newVal) {
     input.disabled = true;
     logWarn('[config] 设置 ' + key + '=' + newVal);
     api.exec(shCmd('config_set ' + key + ' ' + newVal))
@@ -441,14 +515,19 @@
   }
 
   function runAction(btn) {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
+    if (btn.disabled) return;
+    if (btn.dataset.confirm === '1') {
+      var label = btn.textContent.replace(/^\d+/, '').trim();
+      uiConfirm('确认执行「' + label + '」？', { okText: '执行', danger: btn.classList.contains('danger') }).then(function (ok) {
+        if (ok) runActionExec(btn);
+      });
       return;
     }
-    if (btn.dataset.confirm === '1') {
-      if (!window.confirm('确认执行「' + btn.textContent.replace(/^\d+/, '').trim() + '」？')) return;
-    }
-    state.busy = true;
+    runActionExec(btn);
+  }
+
+  function runActionExec(btn) {
+    if (btn.disabled) return;
     btn.disabled = true;
     btn.classList.add('busy');
     setRunStatus('busy');
@@ -462,7 +541,6 @@
       settled = true;
       if (watchdog) clearTimeout(watchdog);
       flushLog();
-      state.busy = false;
       btn.disabled = false;
       btn.classList.remove('busy');
       setRunStatus('');
@@ -477,10 +555,10 @@
       }
     }
 
-    var child = api.spawn('sh', [MOD_DIR + '/action.sh', btn.dataset.cmd]);
+    var child = api.spawn('sh', [MOD_DIR + '/scripts/api.sh', btn.dataset.cmd]);
     watchdog = setTimeout(function () {
       if (!settled) {
-        logErr('执行超时（' + Math.round(SPAWN_TIMEOUT_MS / 1000) + 's），已复位');
+        logErr('前端等待超时（' + Math.round(SPAWN_TIMEOUT_MS / 1000) + 's）；后端进程可能仍在运行，最终结果请以日志/状态页为准');
         settle(false);
       }
     }, SPAWN_TIMEOUT_MS);
@@ -515,12 +593,19 @@
 
   /* ---------- 状态刷新 ---------- */
   function refreshStatus() {
-    if (destroyed || state.busy || state.refreshing) return;
+    if (destroyed || state.refreshing) return;
     state.refreshing = true;
     var seq = ++refreshSeq;
     var btn = $('btn-refresh-status');
     if (btn) btn.disabled = true;
     var t0 = Date.now();
+    function resetUi() {
+      if (destroyed || seq !== refreshSeq) return;
+      state.refreshing = false;
+      var b2 = $('btn-refresh-status');
+      if (b2) b2.disabled = false;
+      clearStatusSkeleton();
+    }
     api.exec(shCmd('status'))
       .then(function (res) {
         if (destroyed || seq !== refreshSeq) return;
@@ -543,14 +628,15 @@
         renderToggles(state.flags);
         logErr('自检异常: ' + ((e && e.message) || e));
       })
-      .then(function () {
-        if (destroyed) return;
-        if (seq === refreshSeq) {
-          state.refreshing = false;
-          var b2 = $('btn-refresh-status');
-          if (b2) b2.disabled = false;
-        }
-      });
+      .then(resetUi, resetUi);
+  }
+
+  /* 状态数据未就绪时清掉骨架屏占位，避免停留在 shimmer */
+  function clearStatusSkeleton() {
+    ['s-battery', 's-joyose', 's-norestrict', 's-hr', 's-deviceidle', 's-backup', 's-freeze'].forEach(function (id) {
+      var el = $(id);
+      if (el && el.querySelector('.skeleton')) el.textContent = '—';
+    });
   }
 
   /* ---------- 备份管理 ---------- */
@@ -591,7 +677,9 @@
           var del = document.createElement('button');
           del.type = 'button';
           del.className = 'b-del';
-          del.textContent = '删除';
+          del.title = '删除备份';
+          del.setAttribute('aria-label', '删除备份');
+          del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
           del.addEventListener('click', function () { deleteBackup(f.name, del); });
           row.appendChild(name);
           row.appendChild(size);
@@ -611,9 +699,10 @@
       logErr('非法备份文件名，已拒绝: ' + name);
       return;
     }
-    if (!window.confirm('确认删除备份 ' + name + ' ？')) return;
-    delBtn.disabled = true;
-    api.exec(shCmd('backup_delete ' + name))
+    uiConfirm('确认删除备份 ' + name + ' ？', { okText: '删除', danger: true }).then(function (ok) {
+      if (!ok) return;
+      delBtn.disabled = true;
+      api.exec(shCmd('backup_delete ' + name))
       .then(function (res) {
         if (destroyed) return;
         delBtn.disabled = false;
@@ -632,6 +721,7 @@
         delBtn.disabled = false;
         logErr('删除异常: ' + ((e && e.message) || e));
       });
+    });
   }
 
   /* ---------- 系统白名单（云控，可编辑） ---------- */
@@ -665,6 +755,7 @@
   function switchWls(name) {
     currentWls = name;
     wlsFilter = '';
+    if (wlsDebounceTimer) { clearTimeout(wlsDebounceTimer); wlsDebounceTimer = null; }
     var si = $('wls-search');
     if (si) si.value = '';
     renderWlsTabs();
@@ -682,6 +773,31 @@
   var wlsPkgs = [];
   var wlsFilter = '';
 
+  var wlsRenderToken = 0;
+  var wlsSeq = 0;
+  var wlsDebounceTimer = null;
+  var WLS_RENDER_CHUNK = 80;
+  function buildWlsRow(listName, pkg) {
+    var row = document.createElement('div');
+    row.className = 'wl-item';
+    var nm = document.createElement('span');
+    nm.className = 'wl-name';
+    nm.textContent = pkg;
+    nm.title = pkg;
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'wl-del';
+    del.title = '移除';
+    del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+    del.addEventListener('click', function () { removeWls(listName, pkg, del); });
+    row.appendChild(nm);
+    row.appendChild(del);
+    return row;
+  }
+
+  /* 分块异步渲染：名单可能数百项，一次性全量重建会长时间阻塞主线程导致 WebUI 卡死。
+     改为每批 WLS_RENDER_CHUNK 行、批间 setTimeout(0) 让出主线程；用自增 token 取消过期的渲染，
+     快速切换名单/过滤/刷新时不会被上一次渲染覆盖也避免竞态。 */
   function renderWlsItems() {
     var listEl = $('wls-list');
     var sumEl = $('wls-summary');
@@ -689,36 +805,42 @@
     var kw = wlsFilter.toLowerCase();
     var shown = kw ? wlsPkgs.filter(function (p) { return p.toLowerCase().indexOf(kw) >= 0; }) : wlsPkgs;
     sumEl.textContent = shown.length + ' / ' + wlsPkgs.length + ' 个';
+    var renderName = currentWls; // 捕获本次渲染所属名单，供行绑定与 step 校验
+    var token = ++wlsRenderToken;
     listEl.innerHTML = '';
     if (!shown.length) {
       listEl.innerHTML = '<div class="log-empty">' + (wlsPkgs.length ? '无匹配结果' : '名单为空') + '</div>';
       return;
     }
-    shown.forEach(function (pkg) {
-      var row = document.createElement('div');
-      row.className = 'wl-item';
-      var nm = document.createElement('span');
-      nm.className = 'wl-name';
-      nm.textContent = pkg;
-      nm.title = pkg;
-      var del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'wl-del';
-      del.title = '移除';
-      del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-      del.addEventListener('click', function () { removeWls(pkg, del); });
-      row.appendChild(nm);
-      row.appendChild(del);
-      listEl.appendChild(row);
-    });
+    var idx = 0;
+    function step() {
+      if (token !== wlsRenderToken) return; // 已被新的渲染取代（切换/刷新/过滤）
+      if (renderName !== currentWls) return; // 名单已切换，作废本次渲染
+      var end = Math.min(idx + WLS_RENDER_CHUNK, shown.length);
+      var frag = document.createDocumentFragment();
+      for (; idx < end; idx++) frag.appendChild(buildWlsRow(renderName, shown[idx]));
+      if (frag.childElementCount) listEl.appendChild(frag);
+      if (idx < shown.length) setTimeout(step, 0); // 让出主线程，长列表不阻塞 UI
+    }
+    step();
   }
 
   function refreshWlsList() {
     if (!currentWls) return;
     var reqName = currentWls;
+    var seq = ++wlsSeq;
+    wlsRenderToken++; // 作废未完成的旧渲染，防止上一名单的行残留
+    var startList = $('wls-list');
+    if (startList) startList.innerHTML = '<div class="log-empty">加载中…</div>';
     api.exec(shCmd('wl_sys_list ' + currentWls))
       .then(function (res) {
-        if (destroyed || reqName !== currentWls) return;
+        if (destroyed || reqName !== currentWls || seq !== wlsSeq) return; // 忽略过期/已切换响应
+        if (res.errno !== 0) {
+          var errList = $('wls-list');
+          if (errList) errList.innerHTML = '<div class="log-empty">读取失败（数据库缺失或忙），请稍后点右上角刷新重试</div>';
+          if (res.stderr) logErr(res.stderr.trim());
+          return;
+        }
         wlsPkgs = [];
         String(res.stdout).split('\n').forEach(function (line) {
           var p = line.trim();
@@ -727,61 +849,139 @@
         renderWlsItems();
       })
       .catch(function (e) {
-        if (destroyed) return;
+        if (destroyed || seq !== wlsSeq) return;
         var listEl = $('wls-list');
         if (listEl) listEl.innerHTML = '<div class="log-empty">读取失败</div>';
         logErr('系统白名单异常: ' + ((e && e.message) || e));
       });
   }
 
+  function wlsUpdateSummary() {
+    var sumEl = $('wls-summary');
+    if (!sumEl) return;
+    var kw = wlsFilter.toLowerCase();
+    var shown = kw ? wlsPkgs.filter(function (p) { return p.toLowerCase().indexOf(kw) >= 0; }).length : wlsPkgs.length;
+    sumEl.textContent = shown + ' / ' + wlsPkgs.length + ' 个';
+  }
+  function wlsRowVisible(pkg) {
+    var kw = wlsFilter.toLowerCase();
+    return !kw || pkg.toLowerCase().indexOf(kw) >= 0;
+  }
+  function wlsInsertRow(listName, pkg) {
+    var listEl = $('wls-list');
+    if (!listEl) return;
+    if (listEl.querySelector('.log-empty')) listEl.innerHTML = '';
+    listEl.appendChild(buildWlsRow(listName, pkg));
+  }
+  function wlsShowPlaceholder() {
+    var listEl = $('wls-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="log-empty">' + (wlsPkgs.length ? '无匹配结果' : '名单为空') + '</div>';
+  }
+
   function addWls() {
     var input = $('wls-input');
-    if (!input || !currentWls) return;
+    var addBtn = $('wls-add-btn');
+    if (!input || !currentWls || input.disabled) return; // 防重入：正在写入时忽略重复触发
     var pkg = input.value.trim();
+    var listName = currentWls; // 捕获发起时的名单，避免请求期间切换名单导致本地增量污染新名单
     if (!pkg) { toast('请输入包名'); return; }
     if (!isValidPkg(pkg)) { logErr('非法包名，已拒绝: ' + pkg); return; }
     input.disabled = true;
-    api.exec(shCmd('wl_sys_add ' + currentWls + ' ' + pkg))
+    if (addBtn) addBtn.disabled = true;
+    setRunStatus('busy');
+    logLine('[wl] 正在写入 ' + listName + '：' + pkg + '（若其它任务持锁需等待，最长约 45s）…');
+    var addOk = false;
+    api.exec(shCmd('wl_sys_add ' + listName + ' ' + pkg))
       .then(function (res) {
         if (destroyed) return;
-        input.disabled = false;
         if (res.errno !== 0) {
+          if (res.stdout) logLine(res.stdout.trim());
           logErr(res.stderr || ('添加失败 errno=' + res.errno));
           toast('添加失败');
           return;
         }
+        addOk = true;
         if (res.stdout) logLine(res.stdout.trim());
         input.value = '';
-        toast(res.stdout.indexOf('已在') >= 0 ? '已在名单中' : '已添加');
-        refreshWlsList();
+        var already = res.stdout && res.stdout.indexOf('已在') >= 0;
+        /* 仅当仍停留在原名单时才本地增量（避免切走污染新名单），
+           且包尚未在数组里才 push/插行，防止重复行 */
+        if (listName === currentWls && wlsPkgs.indexOf(pkg) < 0) {
+          wlsPkgs.push(pkg);
+          wlsUpdateSummary();
+          if (wlsRowVisible(pkg)) wlsInsertRow(listName, pkg);
+        }
+        toast(already ? '已在名单中' : '已添加');
       })
       .catch(function (e) {
         if (destroyed) return;
-        input.disabled = false;
-        logErr('添加异常: ' + ((e && e.message) || e));
+        logErr('添加异常: ' + ((e && e.message) || e) + '（前端等待超时；后端可能已完成写入，正在重新读取名单）');
+        toast('添加超时');
+      })
+      .then(function () {
+        if (destroyed) return;
+        if (input.isConnected) input.disabled = false;
+        if (addBtn && addBtn.isConnected) addBtn.disabled = false;
+        if (!addOk) refreshWlsList(); // 仅失败/超时才整表回读收敛（后端可能已改动）
+        setRunStatus('');
       });
   }
 
-  function removeWls(pkg, delBtn) {
-    if (!window.confirm('确认从「' + currentWls + '」移除 ' + pkg + ' ？\n移除后该应用可能被息屏冻结/后台清理。')) return;
-    delBtn.disabled = true;
-    api.exec(shCmd('wl_sys_remove ' + currentWls + ' ' + pkg))
-      .then(function (res) {
-        if (destroyed) return;
-        delBtn.disabled = false;
-        if (res.errno !== 0) {
-          logErr(res.stderr || '移除失败');
-          toast('移除失败');
-          return;
-        }
-        if (res.stdout) logLine(res.stdout.trim());
-        toast('已移除');
-        refreshWlsList();
-      })
-      .catch(function (e) {
-        if (destroyed) return;
-        delBtn.disabled = false;
-        logErr('移除异常: ' + ((e && e.message) || e));
+  function wlsLabel(name) {
+    for (var i = 0; i < WLS_DEFS.length; i++) if (WLS_DEFS[i].name === name) return WLS_DEFS[i].label;
+    return name;
+  }
+
+  function removeWls(listName, pkg, delBtn) {
+    if (delBtn.disabled) return; // 防重入
+    uiConfirm('确认从「' + wlsLabel(listName) + '」移除 ' + pkg + ' ？\n移除后该应用可能被息屏冻结/后台清理。', { okText: '移除', danger: true })
+      .then(function (ok) {
+        if (!ok) return;
+        delBtn.disabled = true;
+        setRunStatus('busy');
+        logLine('[wl] 正在从 ' + listName + ' 移除 ' + pkg + '…');
+        var rmOk = false;
+        api.exec(shCmd('wl_sys_remove ' + listName + ' ' + pkg))
+          .then(function (res) {
+            if (destroyed) return;
+            if (res.errno !== 0) {
+              if (res.stdout) logLine(res.stdout.trim());
+              logErr(res.stderr || '移除失败');
+              toast('移除失败');
+              return;
+            }
+            rmOk = true;
+            if (res.stdout) logLine(res.stdout.trim());
+            /* 仅当仍停留在原名单时才本地增量（避免切走后污染当前名单/占位）；
+               切换了名单则跳过本地更新，切回时会整表重读 */
+            if (listName === currentWls) {
+              var ix = wlsPkgs.indexOf(pkg);
+              if (ix >= 0) wlsPkgs.splice(ix, 1);
+              wlsUpdateSummary();
+              var listEl = $('wls-list');
+              if (listEl) {
+                var rows = listEl.querySelectorAll('.wl-item');
+                for (var i = 0; i < rows.length; i++) {
+                  var nm = rows[i].querySelector('.wl-name');
+                  if (nm && nm.textContent === pkg) { rows[i].parentNode.removeChild(rows[i]); break; }
+                }
+                if (!listEl.querySelector('.wl-item')) wlsShowPlaceholder();
+              }
+            }
+            toast('已移除');
+          })
+          .catch(function (e) {
+            if (destroyed) return;
+            logErr('移除异常: ' + ((e && e.message) || e) + '（前端等待超时；后端可能已完成，正在重新读取名单）');
+            toast('移除超时');
+          })
+          .then(function () {
+            if (destroyed) return;
+            if (delBtn.isConnected) delBtn.disabled = false;
+            if (!rmOk) refreshWlsList(); // 仅失败/超时才整表回读收敛
+            setRunStatus('');
+          });
       });
   }
 
@@ -838,7 +1038,11 @@
   function loadModuleInfo() {
     var info = getModuleInfo();
     if (!info) return;
-    if (info.name) document.querySelector('header h1').textContent = info.name;
+    if (info.name) {
+      document.querySelector('header h1').textContent = info.name;
+      var hg = $('hero-greeting');
+      if (hg) hg.textContent = info.name;
+    }
     var v = info.versionCode || info.version;
     if (v) $('version-chip').textContent = 'v' + v;
   }
@@ -864,17 +1068,19 @@
     var def = RESTART_ACTIONS[name];
     if (!def) return;
     if (def.confirm) {
-      if (!window.confirm('确认重启手机？当前页面将断开。')) return;
+      uiConfirm('确认重启手机？当前页面将断开。', { okText: '重启', danger: true }).then(function (ok) {
+        if (ok) doRestartExec(def);
+      });
+      return;
     }
+    doRestartExec(def);
+  }
+
+  function doRestartExec(def) {
     hideRestartSheet();
     logSep();
     logWarn('[restart] ' + def.label + '…');
-    var cmd = '';
-    if (name === 'powerkeeper') {
-      cmd = shCmd('restart_pk');
-    } else if (def.cmd) {
-      cmd = shCmd(def.cmd);
-    }
+    var cmd = def.cmd ? shCmd(def.cmd) : '';
     if (!cmd) return;
     api.exec(cmd)
       .then(function (res) {
@@ -932,8 +1138,11 @@
     MOD_DIR = resolveModuleDir();
     var info = getModuleInfo();
     var sub = MOD_DIR;
-    if (info && (info.enabled === true || info.enabled === 'true')) sub += ' · 已启用';
+    var enabled = info && (info.enabled === true || info.enabled === 'true');
+    if (enabled) sub += ' · 已启用';
     $('module-sub').textContent = sub;
+    var hs = $('hero-subtitle');
+    if (hs) hs.textContent = enabled ? '模块已启用' : '模块未启用';
 
     if (!api.available) {
       $('banner').classList.add('show');
@@ -972,22 +1181,47 @@
     if (restartSheet) restartSheet.addEventListener('click', function (e) {
       if (e.target === restartSheet) hideRestartSheet();
     });
+    var dlgOk = $('dlg-ok');
+    if (dlgOk) dlgOk.addEventListener('click', function () { settleConfirm(true); });
+    var dlgCancel = $('dlg-cancel');
+    if (dlgCancel) dlgCancel.addEventListener('click', function () { settleConfirm(false); });
+    var dlgOverlay = $('confirm-dlg');
+    if (dlgOverlay) dlgOverlay.addEventListener('click', function (e) {
+      if (e.target === dlgOverlay) settleConfirm(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && dlgCurrent) settleConfirm(false);
+    });
     document.querySelectorAll('.sheet-circle').forEach(function (b) {
       b.addEventListener('click', function () { doRestartAction(b.dataset.restart); });
     });
     var wlsSearch = $('wls-search');
-    if (wlsSearch) wlsSearch.addEventListener('input', function () {
-      wlsFilter = wlsSearch.value.trim();
-      renderWlsItems();
-    });
+    if (wlsSearch) {
+      wlsSearch.addEventListener('input', function () {
+        if (wlsDebounceTimer) clearTimeout(wlsDebounceTimer);
+        wlsDebounceTimer = setTimeout(function () {
+          wlsFilter = wlsSearch.value.trim();
+          renderWlsItems();
+        }, 180);
+      });
+    }
     var wlsRefresh = $('btn-wls-refresh');
     if (wlsRefresh) wlsRefresh.addEventListener('click', refreshWlsList);
+    var backupRefresh = $('btn-backup-refresh');
+    if (backupRefresh) backupRefresh.addEventListener('click', refreshBackups);
+    var cfgPath = $('config-path');
+    if (cfgPath) cfgPath.textContent = MOD_DIR + '/config/';
+    var infoDir = $('info-dir');
+    if (infoDir) infoDir.textContent = MOD_DIR;
     applyTheme(getThemePref());
-    /* auto 模式下跟随系统主题实时变化 */
+    /* auto 模式下跟随系统主题实时变化（兼容旧 WebView 仅 addListener） */
     if (window.matchMedia) {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+      var mql = window.matchMedia('(prefers-color-scheme: dark)');
+      function onThemeChange() {
         if (getThemePref() === 'auto') applyTheme('auto');
-      });
+      }
+      if (mql && mql.addEventListener) mql.addEventListener('change', onThemeChange);
+      else if (mql && mql.addListener) mql.addListener(onThemeChange);
     }
 
     window.addEventListener('pagehide', function () {
@@ -1017,7 +1251,7 @@
   }
 
   function autoRefresh() {
-    if (!state.busy && !state.refreshing && !destroyed) refreshStatus();
+    if (!state.refreshing && !destroyed) refreshStatus();
   }
 
   document.addEventListener('DOMContentLoaded', init);

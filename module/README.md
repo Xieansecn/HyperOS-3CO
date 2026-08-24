@@ -37,16 +37,18 @@
 
 ---
 
-# HyperOS-3CO v14（260825）说明
+# HyperOS-3CO v14（260826）说明
 
 基于原 260721 manet 模块，在保留原有机型适配、GPU/IO/温控节点调优的基础上，增加并强化以下云控定制能力。
 
-> **WebUI（260824）**：KernelSU WebUI 界面（`webroot/`）已升级为**底部四 Tab**（状态 / 开关 / 操作 / 日志）：
-> - **状态**：概览卡片（电池 / Joyose / PowerKeeper / 高刷 / deviceidle / 备份）+ 手动刷新；
-> - **开关**：五个 `config/` 开关实时读写；
-> - **操作**：菜单 1-8 全部动作 + 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
-> - **日志**：占满整页的实时日志终端，可**导出 txt 到 Download**。
-> - 全部功能仍经 `action.sh <命令>` 驱动；作者署名 Xieansecn & Deepseek Harness & CoolApk@苏疫杆菌。
+> **WebUI**：KernelSU WebUI 界面（`webroot/`）为**底部五 Tab**（状态 / 配置 / 操作 / 白名单 / 日志）：
+> - **状态**：概览卡片（电池 / Joyose / PowerKeeper / 高刷 / deviceidle / 备份）+ 自检刷新；
+> - **配置**：十个 `config/` 持久化开关实时读写（页顶标注配置文件路径，重启生效）；
+> - **操作**：全部快捷动作（各自独立禁用、互不阻塞，日志页实时输出）+ 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
+> - **白名单**：四个系统云控白名单，带行为描述 + 搜索过滤 + 刷新 + 逐项增删（去重）；
+> - **日志**：占满整页的实时日志终端（`[HH:MM:SS]` 前缀、单行不换行），可**导出 txt 到 Download**，导出/清空为右下角悬浮 ico 按钮。
+> - 顶栏含**主题切换 + 重启按钮**（Android 关机式居中大圆菜单：PowerKeeper / Joyose / SystemUI / 手机重启）。
+> - 所有后端命令经 `scripts/api.sh` 分发（非阻塞、按按钮粒度禁用）；作者署名 Xieansecn & Deepseek Harness & CoolApk@苏疫杆菌。
 
 > **动态白名单（260824）**：Joyose 云控写入时，白名单类列表（`game_list` / `support_app` / `background_freeze_whitelist`）动态替换为**设备上全部第三方应用**（`pm list packages -3`）；获取失败时保留原名单。逐游戏调参列表（`migt` / `frc_game_params` 等）保持不变。
 
@@ -89,19 +91,20 @@
 - **WebUI（KernelSU）**：在 KernelSU 管理器 → 模块 → 定制优化 → 打开 WebUI。底部四 Tab：
   - **状态**：概览卡片（电池/云控/高刷/备份）+ 手动刷新；
   - **开关**：七个 `config/` 开关实时读写（含息屏冻结、内核级冻结）；
-  - **操作**：十个快捷操作按钮（菜单 1-10）+ 恢复充电拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 `config/backups/`、可逐份删除）；其中「息屏冻结（立即）/ 即时恢复」为即时操作即时恢复的省电功能；
+  - **操作**：十一个快捷操作按钮（菜单 1-11）+ 恢复充电拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 `config/backups/`、可逐份删除）；其中「息屏冻结（立即）/ 即时恢复」为即时操作即时恢复的省电功能，「一键还原（清理式）」撤销模块限制/冻结、恢复云控接收器、让官方云控重拉（不清手机管家数据，不写回备份）；
   - **日志**：占满整页的实时日志终端，可**导出 txt 到 Download**。
   - WebUI 仅在 KernelSU 管理器内可用（Magisk/APatch 无此入口，不影响其他功能）。
-- **命令行入口**（WebUI / 终端 / 自动化通用）：`action.sh` 支持带参数直接执行，不再进入交互菜单：
+- **命令行入口**（WebUI / 终端 / 自动化通用）：直接用 `scripts/api.sh`，不再经过音量键菜单：
   ```sh
-  sh /data/adb/modules/HyperOS-3CO/action.sh <命令>
+  sh /data/adb/modules/HyperOS-3CO/scripts/api.sh <命令>
   # 命令: joyose | sync_battery | powerkeeper | refresh | status
-  #       restart_pk | backup | restore_charging | config | version | help
+  #       restart_pk | backup | restore_charging | freeze | unfreeze | reset | version | help
   #       config_get <key> | config_set <key> <值>
   #       backup_list | backup_delete <文件名>
+  #       wl_sys_list <名单> | wl_sys_add <名单> <包名> | wl_sys_remove <名单> <包名>
   ```
-  数字 1-9 同样可用（对应交互菜单）。`config_set` 可写：`enable_battery_sync` / `enable_static_protect` / `enable_refresh_follow` / `enable_perf_thermal` / `gpu_boost` / `enable_screen_off_freeze` / `enable_kernel_freeze`。`backup_list` 输出 `文件名<TAB>字节数`，`backup_delete` 带文件名白名单校验（防路径穿越）。
-- `action.sh` 交互（funbox 风格）：**所有动作执行完输出后都会“按任意音量键返回菜单”**，不再被重绘冲掉。优先调用 `/data/adb/modules/funbox/keycheck` 检测按键（无 funbox 时回退 `getevent` 去抖，键位已对齐）；**音量↓ 移动、音量↑ 确认**；每次按键前**无条件 `clear` 清屏**再重绘菜单（与 funbox 一致，避免管理器里刷屏），当前项用 **`-> [N] 功能名`** 高亮；`sleep 0.4` 等待按键抬起，一次按压只算一次输入。
+  数字 1-11 同样可用（对应菜单项）。`config_set` 可写：`enable_battery_sync` / `enable_static_protect` / `enable_refresh_follow` / `enable_perf_thermal` / `gpu_boost` / `enable_screen_off_freeze` / `enable_kernel_freeze` / `enable_nightly_freeze` / `freeze_start_time` / `freeze_end_time`。`backup_list` 输出 `文件名<TAB>字节数`，`backup_delete` 带文件名白名单校验（防路径穿越）。
+- **KernelSU action 按钮（`action.sh`）**：模块列表里的 action 按钮是**音量键交互菜单**，走 funbox 风格。**所有动作执行完输出后都会“按任意音量键返回菜单”**，不再被重绘冲掉。优先调用 `/data/adb/modules/funbox/keycheck` 检测按键（无 funbox 时回退 `getevent` 去抖，键位已对齐）；**音量↓ 移动、音量↑ 确认**；每次按键前**无条件 `clear` 清屏**再重绘菜单（与 funbox 一致，避免管理器里刷屏），当前项用 **`-> [N] 功能名`** 高亮；`sleep 0.4` 等待按键抬起，一次按压只算一次输入。
 - `action.sh` 菜单：
   1. 覆盖 Joyose 云控
   2. 同步电池优化白名单
@@ -113,7 +116,8 @@
   8. 恢复充电（解除热控限制/恢复服务/重读本地云控）
   9. 息屏冻结（立即应用）
   10. 即时恢复（解除冻结）
-  11. 退出
+  11. 一键还原（清理式，让云控重拉）
+  12. 退出
 
 ## 6.5 功能自检
 - `action.sh` 菜单 [5] 现在调用 `scripts/check_status.sh`（只读）：显示模块版本/开关、Joyose 规则、PowerKeeper 策略统计、全局白名单长度、高刷名单数量、电池白名单同步数量、热控服务状态与备份列表，可一键确认各功能是否生效。

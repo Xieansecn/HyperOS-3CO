@@ -1,66 +1,12 @@
 #!/system/bin/sh
 
+# KernelSU 模块列表 action 按钮唯一入口：音量键交互菜单。
+# 所有功能实现均在 scripts/（见 action_lib.sh / api.sh），本文件仅负责
+# 绘制菜单 + 按键选择 + 派发到共享动作函数，不含任何 CLI / WebUI 逻辑。
+
 MODDIR=${0%/*}
 . "$MODDIR/scripts/utils.sh"
-
-SQLITE="${SQLITE:-$MODDIR/bin/sqlite3}"
-CC_DB="${CC_DB:-/data/data/com.miui.powerkeeper/databases/cloud_configure.db}"
-UC_DB="${UC_DB:-/data/data/com.miui.powerkeeper/databases/user_configure.db}"
-JOYOSE_DB="${JOYOSE_DB:-/data/data/com.xiaomi.joyose/databases/teg_config.db}"
-
-run_joyose() {
-    echo "[action] 覆盖 Joyose 云控..."
-    sh "$MODDIR/scripts/joyose_config.sh"
-    echo "[action] Joyose 云控已覆盖"
-}
-
-run_sync_battery() {
-    echo "[action] 同步电池优化白名单到云控..."
-    PK_RESTART=1 sh "$MODDIR/scripts/sync_battery_whitelist.sh"
-}
-
-run_powerkeeper() {
-    echo "[action] 应用 PowerKeeper 静态保护补丁（全部第三方应用）..."
-    PK_RESTART=1 sh "$MODDIR/scripts/powerkeeper_patch.sh"
-}
-
-run_refresh_follow_system() {
-    echo "[action] 高刷跟随系统刷新率设置..."
-    sh "$MODDIR/scripts/refresh_follow_system.sh"
-}
-
-run_restart_pk() {
-    echo "[action] 重启 PowerKeeper 以重新读取云控..."
-    restart_powerkeeper
-    echo "[action] 已完成；PowerKeeper 将由系统自动拉起"
-}
-
-run_backup_db() {
-    echo "[action] 备份云控数据库原文件..."
-    sh "$MODDIR/scripts/backup_cloud_db.sh"
-}
-
-run_restore_charging() {
-    echo "[action] 恢复充电（解锁热控/恢复服务/重读本地云控）..."
-    sh "$MODDIR/scripts/restore_charging.sh"
-}
-
-run_screen_off_freeze() {
-    echo "[action] 息屏冻结（非豁免三方切为可冻结态，重启 PowerKeeper 生效）..."
-    PK_RESTART=1 sh "$MODDIR/scripts/screen_off_freeze.sh" apply
-}
-
-run_screen_off_unfreeze() {
-    echo "[action] 即时恢复（全部三方恢复 noRestrict，解除冻结）..."
-    PK_RESTART=1 sh "$MODDIR/scripts/screen_off_freeze.sh" restore
-}
-
-show_status() {
-    echo ""
-    echo "=== 功能自检 ==="
-    sh "$MODDIR/scripts/check_status.sh"
-    echo ""
-}
+. "$MODDIR/scripts/action_lib.sh"
 
 # 菜单项绘制（funbox 风格：当前项 -> 高亮 + 编号）
 print_item() {
@@ -93,336 +39,9 @@ draw_menu() {
     print_item 8 "$selected" "恢复充电（解除热控限制/恢复服务/重读本地云控）"
     print_item 9 "$selected" "息屏冻结（立即应用）"
     print_item 10 "$selected" "即时恢复（解除冻结）"
-    print_item 11 "$selected" "退出"
+    print_item 11 "$selected" "一键还原（清理式，让云控重拉）"
+    print_item 12 "$selected" "退出"
     echo "======================"
-}
-
-run_selected() {
-    case "$1" in
-        1) run_joyose; return $? ;;
-        2) run_sync_battery; return $? ;;
-        3) run_powerkeeper; return $? ;;
-        4) run_refresh_follow_system; return $? ;;
-        5) show_status ;;
-        6) run_restart_pk ;;
-        7) run_backup_db; return $? ;;
-        8) run_restore_charging ;;
-        9) run_screen_off_freeze; return $? ;;
-        10) run_screen_off_unfreeze; return $? ;;
-        11) echo "[action] 退出"; exit 0 ;;
-        *) echo "[action] 无效选择" ;;
-    esac
-}
-
-# 菜单项名称（选择器指示用）
-menu_label() {
-    case "$1" in
-        1) echo "覆盖 Joyose 云控" ;;
-        2) echo "同步电池优化白名单到云控" ;;
-        3) echo "应用 PowerKeeper 静态保护补丁（全部第三方应用）" ;;
-        4) echo "高刷跟随系统刷新率设置" ;;
-        5) echo "查看当前云控状态" ;;
-        6) echo "重启 PowerKeeper（重新读取云控）" ;;
-        7) echo "备份云控数据库原文件" ;;
-        8) echo "恢复充电（解除热控限制/恢复服务/重读本地云控）" ;;
-        9) echo "息屏冻结（立即应用）" ;;
-        10) echo "即时恢复（解除冻结）" ;;
-        11) echo "退出" ;;
-        *) echo "无效选项" ;;
-    esac
-}
-
-# ---- 命令行入口（WebUI / 终端 / 自动化调用） ----
-# 用法: action.sh <命令> [参数]
-#   命令: joyose|1  sync_battery|2  powerkeeper|3  refresh|4
-#         status|5  restart_pk|6  backup|7  restore_charging|8  exit|9
-#         config | config_get <key> | config_set <key> <值>
-#         backup_list | backup_delete <文件名> | freeze | unfreeze
-#         restart_joyose | restart_systemui | reboot | version | help
-# 无参数时进入音量键交互菜单（原行为不变）。
-
-CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze enable_nightly_freeze freeze_start_time freeze_end_time"
-
-flag_default() {
-    case "$1" in
-        enable_battery_sync)  echo "1" ;;
-        enable_refresh_follow) echo "1" ;;
-        gpu_boost)            echo "false" ;;
-        freeze_start_time)    echo "23:00" ;;
-        freeze_end_time)      echo "07:00" ;;
-        *)                    echo "0" ;;
-    esac
-}
-
-cli_action_id() {
-    case "$1" in
-        1|joyose)           echo "1" ;;
-        2|sync|sync_battery) echo "2" ;;
-        3|powerkeeper)      echo "3" ;;
-        4|refresh|refresh_follow) echo "4" ;;
-        5|status)           echo "5" ;;
-        6|restart_pk)       echo "6" ;;
-        7|backup)           echo "7" ;;
-        8|restore|restore_charging) echo "8" ;;
-        9|freeze)           echo "9" ;;
-        10|unfreeze)        echo "10" ;;
-        11|exit)            echo "11" ;;
-        *)                  echo "" ;;
-    esac
-}
-
-cli_config_get() {
-    case " $CONFIG_KEYS " in
-        *" $1 "*)
-            if [ -f "$MODDIR/config/$1" ]; then
-                echo "$1=$(cat "$MODDIR/config/$1")"
-            else
-                echo "$1=$(flag_default "$1")"
-            fi
-            ;;
-        *)
-            echo "[action] 未知配置项: $1" >&2
-            return 1
-            ;;
-    esac
-}
-
-cli_config_set() {
-    case " $CONFIG_KEYS " in
-        *" $1 "*) ;;
-        *)
-            echo "[action] 未知配置项: $1" >&2
-            return 1
-            ;;
-    esac
-    case "$1" in
-        freeze_start_time|freeze_end_time)
-            # 时间键：仅接受 HH:MM
-            case "$2" in
-                [01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;;
-                *)
-                    echo "[action] 非法时间: $2 (期望 HH:MM，如 23:00)" >&2
-                    return 1
-                    ;;
-            esac
-            ;;
-        *)
-            case "$2" in
-                0|1|true|false) ;;
-                *)
-                    echo "[action] 非法取值: $2 (允许 0/1/true/false)" >&2
-                    return 1
-                    ;;
-            esac
-            ;;
-    esac
-    mkdir -p "$MODDIR/config"
-    printf '%s\n' "$2" >"$MODDIR/config/$1.tmp.$$" && mv -f "$MODDIR/config/$1.tmp.$$" "$MODDIR/config/$1" || {
-        rm -f "$MODDIR/config/$1.tmp.$$" 2>/dev/null || true
-        echo "[action] 写入配置失败" >&2
-        return 1
-    }
-    echo "[action] $1=$2"
-}
-
-cli_dispatch() {
-    case "$1" in
-        config)
-            for k in $CONFIG_KEYS; do
-                cli_config_get "$k"
-            done
-            ;;
-        config_get)
-            cli_config_get "$2"
-            ;;
-        config_set)
-            cli_config_set "$2" "$3"
-            ;;
-        version)
-            grep -E '^(name|version|versionCode|author)=' "$MODDIR/module.prop" 2>/dev/null || echo "module.prop 缺失"
-            ;;
-        backup_list)
-            # 输出: 文件名<TAB>字节数，新→旧
-            if [ -d "$MODDIR/config/backups" ]; then
-                for f in "$MODDIR/config/backups/"*; do
-                    [ -f "$f" ] || continue
-                    printf '%s\t%s\n' "$(basename "$f")" "$(wc -c < "$f")"
-                done | sort -r
-            fi
-            ;;
-        backup_delete)
-            ensure_module_lock
-            case "$2" in
-                cloud_configure_*|user_configure_*|joyose_teg_*|highrefreshrate_*) ;;
-                *)
-                    echo "[action] 非法备份文件名: $2" >&2
-                    return 1
-                    ;;
-            esac
-            case "$2" in
-                *[!/A-Za-z0-9_.-]*|..*)
-                    echo "[action] 非法备份文件名: $2" >&2
-                    return 1
-                    ;;
-            esac
-            if [ -f "$MODDIR/config/backups/$2" ]; then
-                rm -f "$MODDIR/config/backups/$2"
-                echo "[action] 已删除备份: $2"
-            else
-                echo "[action] 备份不存在: $2" >&2
-                return 1
-            fi
-            ;;
-        restart_joyose)
-            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
-            exec_system "am force-stop com.xiaomi.joyose"
-            exec_system "am broadcast -a android.intent.action.BOOT_COMPLETED -p com.xiaomi.joyose"
-            ;;
-        restart_systemui)
-            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
-            exec_system "am force-stop com.android.systemui"
-            ;;
-        reboot)
-            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
-            exec_system "reboot"
-            ;;
-        whitelist_list)
-            if [ -f "$MODDIR/config/screen_off_freeze_whitelist_user" ]; then
-                cat "$MODDIR/config/screen_off_freeze_whitelist_user"
-            fi
-            ;;
-        whitelist_add)
-            is_valid_pkg "$2" || { echo "[action] 非法包名: $2" >&2; return 1; }
-            ensure_module_lock
-            mkdir -p "$MODDIR/config"
-            WL_FILE="$MODDIR/config/screen_off_freeze_whitelist_user"
-            touch "$WL_FILE"
-            if grep -qxF "$2" "$WL_FILE"; then
-                echo "[action] 已在豁免名单: $2"
-            else
-                echo "$2" >>"$WL_FILE" && echo "[action] 已添加豁免: $2" || { echo "[action] 写入失败" >&2; return 1; }
-            fi
-            ;;
-        whitelist_remove)
-            WL_FILE="$MODDIR/config/screen_off_freeze_whitelist_user"
-            if [ ! -f "$WL_FILE" ]; then
-                echo "[action] 豁免名单为空" >&2
-                return 1
-            fi
-            if grep -qxF "$2" "$WL_FILE"; then
-                grep -vxF "$2" "$WL_FILE" >"$WL_FILE.tmp.$$" || true
-                mv -f "$WL_FILE.tmp.$$" "$WL_FILE"
-                echo "[action] 已移除豁免: $2"
-            else
-                echo "[action] 不在豁免名单: $2" >&2
-                return 1
-            fi
-            ;;
-        wl_sys_list)
-            # 用法: wl_sys_list <名单名>  输出每行一个包名
-            case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
-                *)
-                    echo "[action] 未知名单: $2 (可用: FrozenNewWhiteList dozeWhiteListApps levelUtimateSpecialApps sleep_mode_network_white_apps)" >&2
-                    return 1
-                    ;;
-            esac
-            WLS_VAL="$(case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
-                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
-                sleep_mode_network_white_apps)
-                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
-            esac)"
-            printf '%s' "$WLS_VAL" | tr ';' '\n' | tr ':' '\n' | tr ',' '\n' | sed '/^[[:space:]]*$/d'
-            ;;
-        wl_sys_add)
-            # 用法: wl_sys_add <名单名> <包名>
-            case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
-                *) echo "[action] 未知名单: $2" >&2; return 1 ;;
-            esac
-            is_valid_pkg "$3" || { echo "[action] 非法包名: $3" >&2; return 1; }
-            ensure_module_lock
-            SEP=";"
-            case "$2" in dozeWhiteListApps|levelUtimateSpecialApps) SEP=":" ;; sleep_mode_network_white_apps) SEP="," ;; esac
-            CUR="$(case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
-                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
-                sleep_mode_network_white_apps)
-                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
-            esac)"
-            if printf '%s' "$CUR" | tr "$SEP" '\n' | grep -qxF "$3"; then
-                echo "[action] 已在 $2: $3"
-            else
-                NEWVAL="$3"
-                [ -n "$CUR" ] && NEWVAL="$CUR$SEP$3"
-                case "$2" in
-                    FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
-                        backup_db "$CC_DB" cloud_configure
-                        sqlite3_x "$CC_DB" "INSERT OR REPLACE INTO GlobalFeatureTable (userId, configureName, configureParam) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
-                        ;;
-                    sleep_mode_network_white_apps)
-                        backup_db "$UC_DB" user_configure
-                        sqlite3_x "$UC_DB" "INSERT OR REPLACE INTO misc (userId, name, value) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
-                        ;;
-                esac
-                echo "[action] 已加入 $2: $3"
-            fi
-            ;;
-        wl_sys_remove)
-            # 用法: wl_sys_remove <名单名> <包名>
-            case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
-                *) echo "[action] 未知名单: $2" >&2; return 1 ;;
-            esac
-            ensure_module_lock
-            SEP=";"
-            case "$2" in dozeWhiteListApps|levelUtimateSpecialApps) SEP=":" ;; sleep_mode_network_white_apps) SEP="," ;; esac
-            CUR="$(case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
-                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
-                sleep_mode_network_white_apps)
-                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
-            esac)"
-            if ! printf '%s' "$CUR" | tr "$SEP" '\n' | grep -qxF "$3"; then
-                echo "[action] 不在 $2: $3" >&2
-                return 1
-            fi
-            NEWVAL="$(printf '%s' "$CUR" | tr "$SEP" '\n' | grep -vxF "$3" | paste -sd"$SEP" -)"
-            case "$2" in
-                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
-                    backup_db "$CC_DB" cloud_configure
-                    sqlite3_x "$CC_DB" "INSERT OR REPLACE INTO GlobalFeatureTable (userId, configureName, configureParam) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
-                    ;;
-                sleep_mode_network_white_apps)
-                    backup_db "$UC_DB" user_configure
-                    sqlite3_x "$UC_DB" "INSERT OR REPLACE INTO misc (userId, name, value) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
-                    ;;
-            esac
-            echo "[action] 已从 $2 移除: $3"
-            ;;
-
-        help|-h|--help)
-            grep '^# 用法' "$0" | head -n 1 | sed 's/^# *//'
-            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze"
-    echo "    whitelist_list whitelist_add whitelist_remove wl_sys_list wl_sys_add wl_sys_remove"
-    echo "    restart_joyose restart_systemui reboot config config_get config_set backup_list backup_delete version"
-            ;;
-        *)
-            ID="$(cli_action_id "$1")"
-            if [ -z "$ID" ]; then
-                echo "[action] 未知命令: $1 (action.sh help 查看用法)" >&2
-                return 1
-            fi
-            if [ "$ID" = "11" ]; then
-                echo "[action] 退出"
-                return 0
-            fi
-            echo "[action] 已选择: [$ID] $(menu_label "$ID")"
-            run_selected "$ID"
-            return $?
-            ;;
-    esac
 }
 
 # ---- funbox 同款按键检测：优先 keycheck，回退 getevent ----
@@ -455,12 +74,6 @@ show_selected() {
     echo "[action] 已选择: [${selected}] $(menu_label "$selected")"
 }
 
-# 命令行模式：带参数直接执行，不进入交互菜单（WebUI/自动化用）
-if [ "$#" -gt 0 ]; then
-    cli_dispatch "$@"
-    exit $?
-fi
-
 # 兼容性检查：keycheck 或 getevent 至少有一个可用
 if [ ! -x "$KEY_CHECK" ] && ! command -v getevent >/dev/null 2>&1; then
     echo "[action] 当前环境不支持音量键交互，请在 KernelSU/Magisk 模块管理器中运行"
@@ -477,13 +90,13 @@ while true; do
     case "$ret" in
         0) # 音量下：移动下一项
             selected=$((selected + 1))
-            [ "$selected" -gt 11 ] && selected=1
+            [ "$selected" -gt 12 ] && selected=1
             ;;
         1) # 音量上：确认执行
             echo ""
             show_selected
             run_selected "$selected"
-            # 所有动作输出后等待按键返回（[9] 退出已 exit，不会到这里）
+            # 所有动作输出后等待按键返回（[12] 退出已 exit，不会到这里）
             echo ""
             echo "按任意音量键返回菜单..."
             key_click_compat >/dev/null 2>&1 || true

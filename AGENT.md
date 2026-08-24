@@ -9,7 +9,9 @@
 | 路径 | 说明 |
 |---|---|
 | `module/` | 模块源码（刷入包内容） |
-| `module/action.sh` | 交互菜单 + 命令行入口（WebUI/终端/自动化共用） |
+| `module/action.sh` | KernelSU 模块列表 action 按钮：纯音量键交互菜单 |
+| `module/scripts/api.sh` | 后端统一 CLI（WebUI / 终端 / 自动化入口） |
+| `module/scripts/action_lib.sh` | 共享动作函数（run_* / menu_label / config 辅助，被 action.sh 与 api.sh source） |
 | `module/customize.sh` | 刷入时主脚本 |
 | `module/service.sh` | 开机脚本 |
 | `module/scripts/` | 功能脚本（joyose_config / sync_battery_whitelist / powerkeeper_patch / refresh_follow_system / screen_off_freeze / restore_charging / backup_cloud_db / check_status / utils） |
@@ -38,7 +40,7 @@ python3 db_inspect.py  # 查看云控库
    - 写前调用 `backup_db` 备份（保留最近 5 份）。
    - 临时 SQL 文件名必须带 `.$$`（PID）后缀，用后删除。
 4. **`module.prop` 元信息**：`id=HyperOS-3CO`、`name=HyperOS-3CO`、`author=Xieansecn & Deepseek Harness & CoolApk@苏疫杆菌`；不要随意改 id（影响运行时路径 `/data/adb/modules/HyperOS-3CO`）。
-5. **版本号规则**：功能变更按 `YYYYMMDD` 递增（当前 260825），并同步 `module.prop`、`build_module.sh` / `verify_module.sh` 中的 zip 名、README 版本说明。
+5. **版本号规则**：功能变更按 `YYYYMMDD` 递增（当前 260826），并同步 `module.prop`、`build_module.sh` / `verify_module.sh` 中的 zip 名、README 版本说明。
 6. **锁路径**：`utils.sh` 已按模块 id 派生统一锁文件 `/data/adb/modules/.<模块id>.module.lock`，安装期（modules_update）与运行期（modules）共用，保证安装与旧实例互斥。
 7. **toybox 兼容陷阱**：`flock` 在 toybox 上仅支持 `flock [-sxun] fd`（无 `-w`），统一用 `flock -n <fd>` + 轮询实现超时（见 `utils.sh::flock_wait`）；不要用 GNU 独有参数。
 
@@ -46,8 +48,8 @@ python3 db_inspect.py  # 查看云控库
 
 - `webroot/ksu.js` 是 `kernelsu` npm 包的最小自包含实现：`exec`（返回 Promise）、`spawn`（流式）、`toast`、`moduleInfo`。
 - `moduleInfo()` 返回模块信息 **JSON 字符串**（含 `moduleDir` 字段），使用时需 `JSON.parse`。
-- 页面以 root 权限执行命令：统一经 `action.sh <命令>` 驱动，**不要**在 WebUI 里直接拼系统命令。
-- 新增功能需在 `action.sh` 加对应 CLI 命令，再在 `app.js` 里调用。
+- 页面以 root 权限执行命令：统一经 `scripts/api.sh <命令>` 驱动（非阻塞、按按钮粒度禁用），**不要**在 WebUI 里直接拼系统命令。
+- 新增功能需在 `scripts/api.sh` 加对应 CLI 命令，再在 `app.js` 里调用。
 
 ## 新增机型适配
 

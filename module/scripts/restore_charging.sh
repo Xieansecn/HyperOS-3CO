@@ -122,6 +122,21 @@ for t in /sys/class/power_supply/*; do
 done
 echo "  热控进程: $(ps -A 2>/dev/null | grep -E 'thermal-engine|mi_thermald|mimd' | grep -v grep | awk '{print $NF}' | tr '\n' ' ')"
 echo "[charging] 已保持 Joyose 云控接收器禁用，官方冻结策略不会覆盖防冻结定制。"
+
+# 检测是否存在「电池热保护限流」：电池温度过高时内核 BCL 会压低充电电流，
+# 这是系统安全策略，与模块无关，也不是重启/恢复服务能解除的。
+BATT_TEMP="$(cat /sys/class/power_supply/battery/temp 2>/dev/null)"
+CCL="$(cat /sys/class/power_supply/battery/charge_control_limit 2>/dev/null)"
+CCL_MAX="$(cat /sys/class/power_supply/battery/charge_control_limit_max 2>/dev/null)"
+if [ -n "$BATT_TEMP" ] && [ "$BATT_TEMP" -ge 410 ] 2>/dev/null; then
+    BATT_DEG=$((BATT_TEMP / 10))
+    BATT_TENTH=$((BATT_TEMP % 10))
+    echo "[charging] ⚠ 检测到电池温度过高（${BATT_DEG}.${BATT_TENTH}°C），快充被系统热保护限流，与模块无关。"
+    echo "[charging]   请拔掉充电器、移开遮挡、避免一边充一边用，等电池降到 ~40°C 以下再试；"
+    echo "[charging]   或到「手机管家→电池」查看是否开启了充电保护。热保护被触发时点 [8] 无法解除。"
+elif [ -n "$CCL" ] && [ -n "$CCL_MAX" ] && [ "$CCL" -ge "$((CCL_MAX - 1))" ] 2>/dev/null; then
+    echo "[charging] ⚠ 内核充电限流已达上限（charge_control_limit=$CCL/$CCL_MAX），多数由电池温度/健康度触发，与模块无关。"
+fi
 if [ "$RESTORE_FAIL" = "1" ]; then
     echo "[charging] 部分步骤失败，请查看上方日志" >&2
     exit 1

@@ -6,7 +6,7 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC="$ROOT/module"
-OUT="$ROOT/HyperOS-3CO-260825(manet).zip"
+OUT="$ROOT/HyperOS-3CO-260826(manet).zip"
 
 if [ ! -d "$SRC" ]; then
     echo "未找到模块目录: $SRC"
