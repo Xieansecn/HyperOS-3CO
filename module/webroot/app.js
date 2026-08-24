@@ -15,46 +15,46 @@
   var TOGGLE_DEFS = {
     enable_battery_sync: {
       label: '电池白名单同步',
-      desc: '把 deviceidle 电池白名单同步到 PowerKeeper / Joyose（下次开机生效）',
+      desc: '把 deviceidle 电池白名单同步到 PowerKeeper / Joyose',
       def: '1'
     },
     enable_static_protect: {
       label: 'PowerKeeper 静态保护',
-      desc: '把所有第三方应用写入 noRestrict + 多白名单（下次开机生效）',
+      desc: '把所有第三方应用写入 noRestrict + 多白名单',
       def: '0',
       hot: true
     },
     enable_refresh_follow: {
       label: '高刷跟随系统',
-      desc: '清除云控 FPS 名单，高刷跟随系统刷新率设置（下次开机生效）',
+      desc: '清除云控 FPS 名单，高刷跟随系统刷新率设置',
       def: '1'
     },
     enable_perf_thermal: {
       label: '性能热控调优',
-      desc: '停止热控服务，可能影响充电 / 温控（下次开机生效）',
+      desc: '停止热控服务，可能影响充电 / 温控',
       def: '0',
       hot: true
     },
     gpu_boost: {
       label: '禁用 GPU Boost（高通）',
-      desc: 'service.sh 启动时锁定 GPU 节点（下次开机生效）',
+      desc: 'service.sh 启动时锁定 GPU 节点',
       def: 'false'
     },
     enable_screen_off_freeze: {
       label: '息屏冻结（省电）',
-      desc: '开机把非豁免三方应用切为可冻结态，息屏后被冻结/清理；豁免=deviceidle 白名单+白名单文件（下次开机生效）',
+      desc: '开机把非豁免三方应用切为可冻结态，息屏后被冻结/清理；豁免=deviceidle 白名单+白名单文件',
       def: '0',
       hot: true
     },
     enable_kernel_freeze: {
       label: '内核级冻结（实验）',
-      desc: '写入 FrozenControlStatus 启用进程冻结（息屏 ~60s 冻结、唤醒秒解冻）；依赖系统冻结器（下次开机生效）',
+      desc: '写入 FrozenControlStatus 启用进程冻结（息屏 ~60s 冻结、唤醒秒解冻）；依赖系统冻结器',
       def: '0',
       hot: true
     },
     enable_nightly_freeze: {
       label: '夜间定时息屏冻结',
-      desc: '窗口内自动冻结、窗口外自动恢复；需开启「息屏冻结（省电）」配合（下次开机生效）',
+      desc: '窗口内自动冻结、窗口外自动恢复；需开启「息屏冻结（省电）」配合',
       def: '0',
       hot: true
     }
@@ -125,7 +125,9 @@
     if (box.querySelector('.log-empty')) box.innerHTML = '';
     var div = document.createElement('div');
     div.className = 'log-line' + (cls ? ' ' + cls : '');
-    div.textContent = stripAnsi(text);
+    var now = new Date();
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    div.textContent = '[' + p2(now.getHours()) + ':' + p2(now.getMinutes()) + ':' + p2(now.getSeconds()) + '] ' + stripAnsi(text);
     box.appendChild(div);
     while (box.childElementCount > LOG_MAX_NODES) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
@@ -158,12 +160,6 @@
 
   function toast(msg) { if (api) api.toast(msg); }
 
-  function setControlsDisabled(v) {
-    document.querySelectorAll('.btn, .mini-btn, .switch input').forEach(function (el) {
-      el.disabled = v;
-    });
-  }
-
   function shCmd(cmd) { return 'sh ' + MOD_DIR + '/action.sh ' + cmd; }
 
   /* ---------- Tab 切换 ---------- */
@@ -174,6 +170,8 @@
     document.querySelectorAll('#tabbar .tab-btn').forEach(function (b) {
       b.classList.toggle('active', b.dataset.tab === name);
     });
+    var fab = $('fab-group');
+    if (fab) fab.classList.toggle('show', name === 'logs');
   }
 
   /* ---------- 状态解析 ---------- */
@@ -291,7 +289,6 @@
       var input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = (val === '1' || val === 'true');
-      if (state.busy) input.disabled = true;
       input.addEventListener('change', function () {
         setToggle(key, input.checked, input);
       });
@@ -321,7 +318,7 @@
     name.textContent = '定时窗口';
     var desc = document.createElement('div');
     desc.className = 't-desc';
-    desc.textContent = '窗口内自动冻结、窗口外自动恢复；需开启「夜间定时息屏冻结」配合（下次开机生效）';
+    desc.textContent = '窗口内自动冻结、窗口外自动恢复；需开启「夜间定时息屏冻结」配合';
     txt.appendChild(name);
     txt.appendChild(desc);
 
@@ -331,7 +328,6 @@
     tStart.type = 'time';
     tStart.className = 'time-input';
     tStart.value = start;
-    if (state.busy) tStart.disabled = true;
     tStart.addEventListener('change', function () { setTimeWindow('freeze_start_time', tStart.value, tStart); });
     var dash = document.createElement('span');
     dash.className = 'time-dash';
@@ -340,7 +336,6 @@
     tEnd.type = 'time';
     tEnd.className = 'time-input';
     tEnd.value = end;
-    if (state.busy) tEnd.disabled = true;
     tEnd.addEventListener('change', function () { setTimeWindow('freeze_end_time', tEnd.value, tEnd); });
     timeWrap.appendChild(tStart);
     timeWrap.appendChild(dash);
@@ -356,10 +351,6 @@
   }
 
   function setTimeWindow(key, value, input) {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
-      return;
-    }
     if (!/^\d{2}:\d{2}$/.test(value)) {
       logErr('非法时间值，已拒绝: ' + value);
       return;
@@ -388,16 +379,11 @@
   }
 
   function setToggle(key, checked, input) {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
-      input.checked = !checked;
-      return;
-    }
     var def = TOGGLE_DEFS[key];
     var newVal = (def.def === 'true' || def.def === 'false') ? (checked ? 'true' : 'false') : (checked ? '1' : '0');
 
     if (def.hot && checked) {
-      if (!window.confirm('开启「' + def.label + '」可能影响充电/温控，确认继续？（下次开机生效）')) {
+      if (!window.confirm('开启「' + def.label + '」可能影响充电/温控，确认继续？')) {
         input.checked = false;
         return;
       }
@@ -463,7 +449,7 @@
       if (!window.confirm('确认执行「' + btn.textContent.replace(/^\d+/, '').trim() + '」？')) return;
     }
     state.busy = true;
-    setControlsDisabled(true);
+    btn.disabled = true;
     btn.classList.add('busy');
     setRunStatus('busy');
     logSep();
@@ -477,7 +463,7 @@
       if (watchdog) clearTimeout(watchdog);
       flushLog();
       state.busy = false;
-      setControlsDisabled(false);
+      btn.disabled = false;
       btn.classList.remove('busy');
       setRunStatus('');
       if (ok) {
@@ -621,10 +607,6 @@
   }
 
   function deleteBackup(name, delBtn) {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
-      return;
-    }
     if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
       logErr('非法备份文件名，已拒绝: ' + name);
       return;
@@ -654,10 +636,10 @@
 
   /* ---------- 系统白名单（云控，可编辑） ---------- */
   var WLS_DEFS = [
-    { name: 'FrozenNewWhiteList', label: '冻结豁免' },
-    { name: 'dozeWhiteListApps', label: 'Doze 豁免' },
-    { name: 'levelUtimateSpecialApps', label: '终极保护' },
-    { name: 'sleep_mode_network_white_apps', label: '睡眠网络' }
+    { name: 'FrozenNewWhiteList', label: '冻结豁免', desc: '息屏冻结/清理不动的应用（含 QQ/微信/音乐等）。息屏冻结启用时，非豁免三方会从这里移除以便冻结' },
+    { name: 'dozeWhiteListApps', label: 'Doze 豁免', desc: '系统深度休眠期间仍可联网/被唤醒的应用（含小米推送通道）。电池白名单同步会追加 deviceidle 白名单' },
+    { name: 'levelUtimateSpecialApps', label: '终极保护', desc: '系统最高保活等级（核心通讯）。不会被后台清理/杀进程；息屏冻结策略下仍可冻结' },
+    { name: 'sleep_mode_network_white_apps', label: '睡眠网络', desc: '夜间睡眠窗口内仍允许联网的系统组件（xmsf/securitycore/networkstack 等），保证推送可达' }
   ];
   var currentWls = null;
 
@@ -682,55 +664,77 @@
 
   function switchWls(name) {
     currentWls = name;
+    wlsFilter = '';
+    var si = $('wls-search');
+    if (si) si.value = '';
     renderWlsTabs();
+    var desc = $('wls-desc');
+    if (desc) {
+      var d = null;
+      WLS_DEFS.forEach(function (x) { if (x.name === name) d = x; });
+      if (d) {
+        desc.textContent = d.label + '：' + d.desc;
+      }
+    }
     refreshWlsList();
   }
 
-  function refreshWlsList() {
+  var wlsPkgs = [];
+  var wlsFilter = '';
+
+  function renderWlsItems() {
     var listEl = $('wls-list');
     var sumEl = $('wls-summary');
-    if (!listEl || !sumEl || !currentWls) return;
+    if (!listEl || !sumEl) return;
+    var kw = wlsFilter.toLowerCase();
+    var shown = kw ? wlsPkgs.filter(function (p) { return p.toLowerCase().indexOf(kw) >= 0; }) : wlsPkgs;
+    sumEl.textContent = shown.length + ' / ' + wlsPkgs.length + ' 个';
+    listEl.innerHTML = '';
+    if (!shown.length) {
+      listEl.innerHTML = '<div class="log-empty">' + (wlsPkgs.length ? '无匹配结果' : '名单为空') + '</div>';
+      return;
+    }
+    shown.forEach(function (pkg) {
+      var row = document.createElement('div');
+      row.className = 'wl-item';
+      var nm = document.createElement('span');
+      nm.className = 'wl-name';
+      nm.textContent = pkg;
+      nm.title = pkg;
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'wl-del';
+      del.title = '移除';
+      del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+      del.addEventListener('click', function () { removeWls(pkg, del); });
+      row.appendChild(nm);
+      row.appendChild(del);
+      listEl.appendChild(row);
+    });
+  }
+
+  function refreshWlsList() {
+    if (!currentWls) return;
     var reqName = currentWls;
     api.exec(shCmd('wl_sys_list ' + currentWls))
       .then(function (res) {
         if (destroyed || reqName !== currentWls) return;
-        var pkgs = [];
+        wlsPkgs = [];
         String(res.stdout).split('\n').forEach(function (line) {
           var p = line.trim();
-          if (p && isValidPkg(p)) pkgs.push(p);
+          if (p && isValidPkg(p)) wlsPkgs.push(p);
         });
-        sumEl.textContent = pkgs.length ? pkgs.length + ' 个' : '';
-        listEl.innerHTML = '';
-        if (!pkgs.length) {
-          listEl.innerHTML = '<div class="log-empty">名单为空</div>';
-          return;
-        }
-        pkgs.forEach(function (pkg) {
-          var row = document.createElement('div');
-          row.className = 'wl-item';
-          var nm = document.createElement('span');
-          nm.className = 'wl-name';
-          nm.textContent = pkg;
-          nm.title = pkg;
-          var del = document.createElement('button');
-          del.type = 'button';
-          del.className = 'wl-del';
-          del.textContent = '移除';
-          del.addEventListener('click', function () { removeWls(pkg, del); });
-          row.appendChild(nm);
-          row.appendChild(del);
-          listEl.appendChild(row);
-        });
+        renderWlsItems();
       })
       .catch(function (e) {
         if (destroyed) return;
-        listEl.innerHTML = '<div class="log-empty">读取失败</div>';
+        var listEl = $('wls-list');
+        if (listEl) listEl.innerHTML = '<div class="log-empty">读取失败</div>';
         logErr('系统白名单异常: ' + ((e && e.message) || e));
       });
   }
 
   function addWls() {
-    if (state.busy) { toast('有任务正在执行，请稍候'); return; }
     var input = $('wls-input');
     if (!input || !currentWls) return;
     var pkg = input.value.trim();
@@ -759,7 +763,6 @@
   }
 
   function removeWls(pkg, delBtn) {
-    if (state.busy) { toast('有任务正在执行，请稍候'); return; }
     if (!window.confirm('确认从「' + currentWls + '」移除 ' + pkg + ' ？\n移除后该应用可能被息屏冻结/后台清理。')) return;
     delBtn.disabled = true;
     api.exec(shCmd('wl_sys_remove ' + currentWls + ' ' + pkg))
@@ -840,6 +843,60 @@
     if (v) $('version-chip').textContent = 'v' + v;
   }
 
+  /* ---------- 重启菜单 ---------- */
+  var RESTART_ACTIONS = {
+    powerkeeper: { label: '重启 PowerKeeper', cmd: 'restart_pk', confirm: false },
+    joyose: { label: '重启 Joyose', cmd: '', confirm: false },
+    systemui: { label: '重启 SystemUI', cmd: '', confirm: false },
+    reboot: { label: '重启手机', cmd: '', confirm: true }
+  };
+
+  function showRestartSheet() {
+    var sheet = $('restart-sheet');
+    if (sheet) sheet.classList.add('show');
+  }
+  function hideRestartSheet() {
+    var sheet = $('restart-sheet');
+    if (sheet) sheet.classList.remove('show');
+  }
+
+  function doRestartAction(name) {
+    var def = RESTART_ACTIONS[name];
+    if (!def) return;
+    if (def.confirm) {
+      if (!window.confirm('确认重启手机？当前页面将断开。')) return;
+    }
+    hideRestartSheet();
+    logSep();
+    logWarn('[restart] ' + def.label + '…');
+    var cmd = '';
+    if (name === 'powerkeeper') {
+      cmd = shCmd('restart_pk');
+    } else if (name === 'joyose') {
+      cmd = 'am force-stop com.xiaomi.joyose && am broadcast -a android.intent.action.BOOT_COMPLETED -p com.xiaomi.joyose';
+    } else if (name === 'systemui') {
+      cmd = 'am force-stop com.android.systemui';
+    } else if (name === 'reboot') {
+      cmd = 'reboot';
+    }
+    if (!cmd) return;
+    api.exec(cmd)
+      .then(function (res) {
+        if (destroyed) return;
+        if (res.errno !== 0) {
+          logErr('[restart] 失败: ' + (res.stderr || ('errno=' + res.errno)));
+          toast('重启失败');
+          return;
+        }
+        logOk('[restart] ' + def.label + ' 完成');
+        toast(def.label + ' 完成');
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        logErr('[restart] 异常: ' + ((e && e.message) || e));
+      });
+  }
+
   /* ---------- 主题切换 ---------- */
   var THEME_KEY = 'asphyxia_theme';
   var THEME_ICONS = {
@@ -911,6 +968,24 @@
     }
     var btnTheme = $('btn-theme');
     if (btnTheme) btnTheme.addEventListener('click', cycleTheme);
+    var btnRestart = $('btn-restart');
+    if (btnRestart) btnRestart.addEventListener('click', showRestartSheet);
+    var restartClose = $('restart-close');
+    if (restartClose) restartClose.addEventListener('click', hideRestartSheet);
+    var restartSheet = $('restart-sheet');
+    if (restartSheet) restartSheet.addEventListener('click', function (e) {
+      if (e.target === restartSheet) hideRestartSheet();
+    });
+    document.querySelectorAll('.sheet-circle').forEach(function (b) {
+      b.addEventListener('click', function () { doRestartAction(b.dataset.restart); });
+    });
+    var wlsSearch = $('wls-search');
+    if (wlsSearch) wlsSearch.addEventListener('input', function () {
+      wlsFilter = wlsSearch.value.trim();
+      renderWlsItems();
+    });
+    var wlsRefresh = $('btn-wls-refresh');
+    if (wlsRefresh) wlsRefresh.addEventListener('click', refreshWlsList);
     applyTheme(getThemePref());
     /* auto 模式下跟随系统主题实时变化 */
     if (window.matchMedia) {
