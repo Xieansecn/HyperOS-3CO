@@ -652,120 +652,6 @@
       });
   }
 
-  /* ---------- 白名单豁免冻结 ---------- */
-  function refreshWhitelist() {
-    var listEl = $('wl-list');
-    var sumEl = $('wl-summary');
-    if (!listEl || !sumEl) return;
-    api.exec(shCmd('whitelist_list'))
-      .then(function (res) {
-        if (destroyed) return;
-        var pkgs = [];
-        String(res.stdout).split('\n').forEach(function (line) {
-          var p = line.trim();
-          if (p && /^[A-Za-z0-9_.]+$/.test(p)) pkgs.push(p);
-        });
-        sumEl.textContent = pkgs.length ? pkgs.length + ' 个' : '';
-        listEl.innerHTML = '';
-        if (!pkgs.length) {
-          listEl.innerHTML = '<div class="log-empty">暂无豁免应用</div>';
-          return;
-        }
-        pkgs.forEach(function (pkg) {
-          var row = document.createElement('div');
-          row.className = 'wl-item';
-          var nm = document.createElement('span');
-          nm.className = 'wl-name';
-          nm.textContent = pkg;
-          nm.title = pkg;
-          var del = document.createElement('button');
-          del.type = 'button';
-          del.className = 'wl-del';
-          del.textContent = '移除';
-          del.addEventListener('click', function () { removeWhitelist(pkg, del); });
-          row.appendChild(nm);
-          row.appendChild(del);
-          listEl.appendChild(row);
-        });
-      })
-      .catch(function (e) {
-        if (destroyed) return;
-        listEl.innerHTML = '<div class="log-empty">读取白名单失败</div>';
-        logErr('白名单列表异常: ' + ((e && e.message) || e));
-      });
-  }
-
-  function addWhitelist() {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
-      return;
-    }
-    var input = $('wl-input');
-    if (!input) return;
-    var pkg = input.value.trim();
-    if (!pkg) {
-      toast('请输入包名');
-      return;
-    }
-    if (!/^[A-Za-z0-9_.]+$/.test(pkg) || pkg.charAt(0) === '.' || pkg.slice(-1) === '.' || pkg.indexOf('..') >= 0) {
-      logErr('非法包名，已拒绝: ' + pkg);
-      return;
-    }
-    var btn = $('wl-add-btn');
-    if (btn) btn.disabled = true;
-    logWarn('[whitelist] 添加 ' + pkg);
-    api.exec(shCmd('whitelist_add ' + pkg))
-      .then(function (res) {
-        if (destroyed) return;
-        if (btn) btn.disabled = false;
-        if (res.errno !== 0) {
-          logErr(res.stderr || ('whitelist_add 失败 (errno=' + res.errno + ')'));
-          toast('添加失败');
-          return;
-        }
-        if (res.stdout) logLine(res.stdout.trim());
-        input.value = '';
-        toast('已添加豁免');
-        refreshWhitelist();
-      })
-      .catch(function (e) {
-        if (destroyed) return;
-        if (btn) btn.disabled = false;
-        logErr('添加异常: ' + ((e && e.message) || e));
-      });
-  }
-
-  function removeWhitelist(pkg, delBtn) {
-    if (state.busy) {
-      toast('有任务正在执行，请稍候');
-      return;
-    }
-    if (!/^[A-Za-z0-9_.]+$/.test(pkg) || pkg.charAt(0) === '.' || pkg.slice(-1) === '.' || pkg.indexOf('..') >= 0) {
-      logErr('非法包名，已拒绝: ' + pkg);
-      return;
-    }
-    if (!window.confirm('确认将 ' + pkg + ' 移出豁免白名单？')) return;
-    delBtn.disabled = true;
-    api.exec(shCmd('whitelist_remove ' + pkg))
-      .then(function (res) {
-        if (destroyed) return;
-        delBtn.disabled = false;
-        if (res.errno !== 0) {
-          logErr(res.stderr || '移除失败');
-          toast('移除失败');
-          return;
-        }
-        if (res.stdout) logLine(res.stdout.trim());
-        toast('已移除');
-        refreshWhitelist();
-      })
-      .catch(function (e) {
-        if (destroyed) return;
-        delBtn.disabled = false;
-        logErr('移除异常: ' + ((e && e.message) || e));
-      });
-  }
-
   /* ---------- 系统白名单（云控，可编辑） ---------- */
   var WLS_DEFS = [
     { name: 'FrozenNewWhiteList', label: '冻结豁免' },
@@ -1012,17 +898,6 @@
     if (btnRefresh) btnRefresh.addEventListener('click', refreshStatus);
     var btnExport = $('btn-export-log');
     if (btnExport) btnExport.addEventListener('click', exportLog);
-    var wlAddBtn = $('wl-add-btn');
-    if (wlAddBtn) wlAddBtn.addEventListener('click', addWhitelist);
-    var wlInput = $('wl-input');
-    if (wlInput) {
-      wlInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          addWhitelist();
-        }
-      });
-    }
     var wlsAddBtn = $('wls-add-btn');
     if (wlsAddBtn) wlsAddBtn.addEventListener('click', addWls);
     var wlsInput = $('wls-input');
@@ -1065,7 +940,6 @@
     loadModuleInfo();
     refreshStatus();
     refreshBackups();
-    refreshWhitelist();
     renderWlsTabs();
     switchWls(WLS_DEFS[0].name);
     autoTimer = setInterval(autoRefresh, AUTO_REFRESH_MS);

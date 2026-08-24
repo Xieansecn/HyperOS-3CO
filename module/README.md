@@ -50,7 +50,7 @@
 
 > **动态白名单（260824）**：Joyose 云控写入时，白名单类列表（`game_list` / `support_app` / `background_freeze_whitelist`）动态替换为**设备上全部第三方应用**（`pm list packages -3`）；获取失败时保留原名单。逐游戏调参列表（`migt` / `frc_game_params` 等）保持不变。
 
-> **息屏冻结（260825 新增）**：独立于恢复充电的省电功能——把非豁免三方应用切为可冻结态，息屏后由 PowerKeeper 冻结/清理（B 站等默认不豁免，直接解决夜间偷跑耗电）；「即时恢复」一键解除冻结（重启 PowerKeeper 秒级生效）。豁免 = 系统电池白名单 + 内置 `screen_off_freeze_whitelist` + **用户白名单（`whitelist_add/remove` 或 WebUI 编辑）**（音乐应用必须豁免）。
+> **息屏冻结（260825 新增）**：独立于恢复充电的省电功能——把非豁免三方应用切为可冻结态，息屏后由 PowerKeeper 冻结/清理（B 站等默认不豁免，直接解决夜间偷跑耗电）；「即时恢复」一键解除冻结（重启 PowerKeeper 秒级生效）。豁免 = 系统电池白名单 + 内置 `screen_off_freeze_whitelist` + 用户白名单（`whitelist_add/remove`）（音乐应用必须豁免）。
 > **夜间定时（260825）**：`enable_nightly_freeze=1` 时开机启动定时守护，在 `freeze_start_time ~ freeze_end_time`（默认 23:00-07:00，可调）窗口内自动冻结、窗口外自动恢复；窗口时间用 `config_set freeze_start_time 22:30` 等设置。
 
 > **充电安全性（260723 重点）**：本版已从 `system.prop` 移除全部热控/温控覆盖，且 `service.sh` 默认**不再**停止 `thermal-engine` / `mi_thermald` / `mimd-service` 等热控服务。若你曾遇到快速充电消失，请重刷本版；也可在 `action.sh` 菜单 [8] 一键恢复充电并重读本地云控。
