@@ -22,12 +22,10 @@ uninstall_module() {
         exec 9>"$MODULE_LOCK_FILE"
         flock_wait 5 || echo "[uninstall] 模块任务可能仍在运行，继续卸载"
     fi
-    # 与 /storage/emulated/0/恢复joy(异常时使用).sh 同款清理机制
+    # 与 /storage/emulated/0/恢复joy(异常时使用).sh 同款清理机制（不清理手机管家：PowerKeeper/安全中心用户配置保留）
     exec_system "pm clear com.xiaomi.joyose"
     exec_system "pm clear com.android.htmlviewer"
     exec_system "pm clear com.miui.daemon"
-    exec_system "pm clear com.miui.powerkeeper"
-    exec_system "pm clear com.miui.securitycenter"
     exec_system "am force-stop com.xiaomi.joyose"
 
     # 恢复 Joyose 云控与 SmartOp 服务

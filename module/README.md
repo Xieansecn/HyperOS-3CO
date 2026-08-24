@@ -31,16 +31,13 @@
 - Redmi K60 / POCO F5 Pro (mondrian)
 - Redmi Note 12 Turbo / POCO F5 (marble)
 
-## Redmi K70 系列
-- Redmi K70 Pro (manet)（本仓库实测机型）
-
 ## 小米 / REDMI 平板系列
 - REDMI K Pad / Xiaomi Pad Mini (turner)
 - 小米平板 7 (uke)
 
 ---
 
-# HyperOS-3CO v13（260824）说明
+# 定制版 v13（260824）说明
 
 基于原 260721 manet 模块，在保留原有机型适配、GPU/IO/温控节点调优的基础上，增加并强化以下云控定制能力。
 
@@ -49,16 +46,14 @@
 > - **开关**：五个 `config/` 开关实时读写；
 > - **操作**：菜单 1-8 全部动作 + 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
 > - **日志**：占满整页的实时日志终端，可**导出 txt 到 Download**。
-> - 全部功能仍经 `action.sh <命令>` 驱动；作者：CoolApk@苏疫杆菌。
+> - 全部功能仍经 `action.sh <命令>` 驱动；作者署名 Xieansecn & Deepseek Harness。
 
 > **动态白名单（260824）**：Joyose 云控写入时，白名单类列表（`game_list` / `support_app` / `background_freeze_whitelist`）动态替换为**设备上全部第三方应用**（`pm list packages -3`）；获取失败时保留原名单。逐游戏调参列表（`migt` / `frc_game_params` 等）保持不变。
 
 > **充电安全性（260723 重点）**：本版已从 `system.prop` 移除全部热控/温控覆盖，且 `service.sh` 默认**不再**停止 `thermal-engine` / `mi_thermald` / `mimd-service` 等热控服务。若你曾遇到快速充电消失，请重刷本版；也可在 `action.sh` 菜单 [8] 一键恢复充电并重读本地云控。
 
-## 0. 升级/重装时的数据安全（重要）
-- 重装/更新模块时，`customize.sh` 会询问**是否执行旧版本完整清理**：
-  - **音量↓（推荐）**：跳过清理，保留手机管家（PowerKeeper/安全中心）配置；Joyose 仍会重建以写入定制云控；
-  - **音量↑**：执行旧版本清理（`pm clear` Joyose/PowerKeeper/安全中心等），手机管家配置将被清除，仅云控异常/卡死时使用。
+## 0. 升级/重装时的数据安全
+- 重装/更新模块时**不清理手机管家**（PowerKeeper/安全中心）的用户配置，也不做任何旧版本数据清除；Joyose 仍会重建并写入定制云控，手机管家设置原样保留。
 
 ## 1. Joyose 云控覆盖
 - 安装时把当前机型 JSON 写入 `teg_config.db`（common_config + booster_config）。
@@ -88,7 +83,7 @@
 - 支持 `BACKUP_DB=0` 关闭备份、`DRY_RUN=1` 跳过系统服务操作，便于在数据库副本上做 dry-run 验证。
 
 ## 6. 手动管理
-- **WebUI（KernelSU）**：在 KernelSU 管理器 → 模块 → HyperOS-3CO → 打开 WebUI。底部四 Tab：
+- **WebUI（KernelSU）**：在 KernelSU 管理器 → 模块 → 定制优化 → 打开 WebUI。底部四 Tab：
   - **状态**：概览卡片（电池/云控/高刷/备份）+ 手动刷新；
   - **开关**：五个 `config/` 开关实时读写；
   - **操作**：八个快捷操作按钮（与菜单 1-8 一一对应）+ 恢复充电拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 `config/backups/`、可逐份删除）；
@@ -96,7 +91,7 @@
   - WebUI 仅在 KernelSU 管理器内可用（Magisk/APatch 无此入口，不影响其他功能）。
 - **命令行入口**（WebUI / 终端 / 自动化通用）：`action.sh` 支持带参数直接执行，不再进入交互菜单：
   ```sh
-  sh /data/adb/modules/HyperOS-3CO/action.sh <命令>
+  sh /data/adb/modules/Asphyxia/action.sh <命令>
   # 命令: joyose | sync_battery | powerkeeper | refresh | status
   #       restart_pk | backup | restore_charging | config | version | help
   #       config_get <key> | config_set <key> <值>
@@ -131,4 +126,4 @@
 
 ## 8. 性能热控调优（默认关闭）
 - 默认不执行任何可能影响充电/温控的操作。
-- 如确实需要，手动开启：`echo 1 > /data/adb/modules/HyperOS-3CO/config/enable_perf_thermal`，重启后生效；恢复充电时直接删掉该开关或执行菜单 [8]。
+- 如确实需要，手动开启：`echo 1 > /data/adb/modules/Asphyxia/config/enable_perf_thermal`，重启后生效；恢复充电时直接删掉该开关或执行菜单 [8]。

@@ -20,6 +20,7 @@ set_perm "$MODPATH/scripts/utils.sh" 0 0 0644
 set_perm "$MODPATH/module.prop" 0 0 0644
 set_perm "$MODPATH/system.prop" 0 0 0644
 set_perm "$MODPATH/README.md" 0 0 0644
+set_perm "$MODPATH/模块说明文档.md" 0 0 0644
 
 MODDIR="$MODPATH"
 . "$MODPATH/scripts/utils.sh"
@@ -61,16 +62,6 @@ else
     fi
 fi
 
-uninstall_old_module() {
-    MODULE_ID="$(grep_prop id "$MODPATH/module.prop")"
-    CUR_PWD="$PWD"
-    cd "/data/adb/modules/$MODULE_ID" || return
-    echo ""
-    echo "-          Cleanup old module"
-    sh "/data/adb/modules/$MODULE_ID/uninstall.sh" wait >/dev/null 2>&1
-    cd "$CUR_PWD" || return
-}
-
 wait_db() {
     cp -rf "$FUNCTIONS/$DEVICE" "$MODPATH"
     rm -rf "$FUNCTIONS"
@@ -104,19 +95,6 @@ echo "          音量↑:[是]│音量↓:[否]"
 
 if key_click; then
     echo "              ✔"
-
-    echo ""
-    echo "-        是否执行 [旧版本完整清理]"
-    echo "  ⚠ 将清空 Joyose/PowerKeeper/安全中心等应用数据"
-    echo "  （手机管家配置会被清除；仅云控异常/卡死时需要）"
-    echo "  （跳过 = 保留手机管家配置；Joyose 仍会重建以写入定制云控）"
-    echo "          音量↑:[清理]│音量↓:[跳过(推荐)]"
-    if key_click; then
-        echo "              ✔ 正在执行旧版本清理..."
-        uninstall_old_module
-    else
-        echo "                        ✔ 跳过旧版本清理，保留手机管家配置"
-    fi
 
     # 清理系统包缓存，确保 Joyose/PowerKeeper 重新解析云控信息
     rm -rf /data/system/package_cache
