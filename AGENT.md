@@ -12,7 +12,7 @@
 | `module/action.sh` | 交互菜单 + 命令行入口（WebUI/终端/自动化共用） |
 | `module/customize.sh` | 刷入时主脚本 |
 | `module/service.sh` | 开机脚本 |
-| `module/scripts/` | 功能脚本（joyose_config / sync_battery_whitelist / powerkeeper_patch / refresh_follow_system / restore_charging / backup_cloud_db / check_status / utils） |
+| `module/scripts/` | 功能脚本（joyose_config / sync_battery_whitelist / powerkeeper_patch / refresh_follow_system / screen_off_freeze / restore_charging / backup_cloud_db / check_status / utils） |
 | `module/webroot/` | KernelSU WebUI（index.html / style.css / app.js / ksu.js） |
 | `module/functions/<device>/` | 各机型 Joyose 云控 JSON 配置 |
 | `module/bin/sqlite3` | 内置 SQLite 二进制（勿替换为旧版） |

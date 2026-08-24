@@ -99,6 +99,10 @@ else
         echo "[charging] 重新应用 PowerKeeper 静态保护（全部第三方应用）..."
         sh "$MODDIR/scripts/powerkeeper_patch.sh"
     fi
+    if flag_enabled enable_screen_off_freeze 0; then
+        echo "[charging] 重新应用息屏冻结（防止恢复充电撤销冻结）..."
+        sh "$MODDIR/scripts/screen_off_freeze.sh" apply
+    fi
 fi
 
 echo "[charging] 恢复指令已执行"

@@ -41,8 +41,18 @@ run_backup_db() {
 }
 
 run_restore_charging() {
-    echo "[action] 恢复充电（解锁热控/恢复服务/重拉云控）..."
+    echo "[action] 恢复充电（解锁热控/恢复服务/重读本地云控）..."
     sh "$MODDIR/scripts/restore_charging.sh"
+}
+
+run_screen_off_freeze() {
+    echo "[action] 息屏冻结（非豁免三方切为可冻结态，重启 PowerKeeper 生效）..."
+    PK_RESTART=1 sh "$MODDIR/scripts/screen_off_freeze.sh" apply
+}
+
+run_screen_off_unfreeze() {
+    echo "[action] 即时恢复（全部三方恢复 noRestrict，解除冻结）..."
+    PK_RESTART=1 sh "$MODDIR/scripts/screen_off_freeze.sh" restore
 }
 
 show_status() {
@@ -81,7 +91,9 @@ draw_menu() {
     print_item 6 "$selected" "重启 PowerKeeper（重新读取云控）"
     print_item 7 "$selected" "备份云控数据库原文件"
     print_item 8 "$selected" "恢复充电（解除热控限制/恢复服务/重读本地云控）"
-    print_item 9 "$selected" "退出"
+    print_item 9 "$selected" "息屏冻结（立即应用）"
+    print_item 10 "$selected" "即时恢复（解除冻结）"
+    print_item 11 "$selected" "退出"
     echo "======================"
 }
 
@@ -95,7 +107,9 @@ run_selected() {
         6) run_restart_pk ;;
         7) run_backup_db ;;
         8) run_restore_charging ;;
-        9) echo "[action] 退出"; exit 0 ;;
+        9) run_screen_off_freeze ;;
+        10) run_screen_off_unfreeze ;;
+        11) echo "[action] 退出"; exit 0 ;;
         *) echo "[action] 无效选择" ;;
     esac
 }
@@ -121,10 +135,11 @@ menu_label() {
 #   命令: joyose|1  sync_battery|2  powerkeeper|3  refresh|4
 #         status|5  restart_pk|6  backup|7  restore_charging|8  exit|9
 #         config | config_get <key> | config_set <key> <值>
-#         backup_list | backup_delete <文件名> | version | help
+#         backup_list | backup_delete <文件名> | freeze | unfreeze
+#         version | help
 # 无参数时进入音量键交互菜单（原行为不变）。
 
-CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost"
+CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze"
 
 flag_default() {
     case "$1" in
@@ -145,7 +160,9 @@ cli_action_id() {
         6|restart_pk)       echo "6" ;;
         7|backup)           echo "7" ;;
         8|restore|restore_charging) echo "8" ;;
-        9|exit)             echo "9" ;;
+        9|freeze)           echo "9" ;;
+        10|unfreeze)        echo "10" ;;
+        11|exit)            echo "11" ;;
         *)                  echo "" ;;
     esac
 }
@@ -240,7 +257,7 @@ cli_dispatch() {
             ;;
         help|-h|--help)
             grep '^# 用法' "$0" | head -n 1 | sed 's/^# *//'
-            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging config config_get config_set backup_list backup_delete version"
+            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze config config_get config_set backup_list backup_delete version"
             ;;
         *)
             ID="$(cli_action_id "$1")"
@@ -310,7 +327,7 @@ while true; do
     case "$ret" in
         0) # 音量下：移动下一项
             selected=$((selected + 1))
-            [ "$selected" -gt 9 ] && selected=1
+            [ "$selected" -gt 11 ] && selected=1
             ;;
         1) # 音量上：确认执行
             echo ""

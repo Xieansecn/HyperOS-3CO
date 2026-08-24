@@ -4,7 +4,7 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC="$ROOT/module"
-ZIP="$ROOT/HyperOS-3CO-260824(manet).zip"
+ZIP="$ROOT/HyperOS-3CO-260825(manet).zip"
 FAIL=0
 
 echo "==== 1. shell 语法检查 ===="

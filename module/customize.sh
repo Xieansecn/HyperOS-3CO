@@ -15,6 +15,8 @@ set_perm "$MODPATH/scripts/refresh_follow_system.sh" 0 0 0755
 set_perm "$MODPATH/scripts/backup_cloud_db.sh" 0 0 0755
 set_perm "$MODPATH/scripts/restore_charging.sh" 0 0 0755
 set_perm "$MODPATH/scripts/check_status.sh" 0 0 0755
+set_perm "$MODPATH/scripts/screen_off_freeze.sh" 0 0 0755
+set_perm "$MODPATH/screen_off_freeze_whitelist" 0 0 0644
 set_perm "$MODPATH/uninstall.sh" 0 0 0755
 set_perm "$MODPATH/scripts/utils.sh" 0 0 0644
 set_perm "$MODPATH/module.prop" 0 0 0644
@@ -137,6 +139,20 @@ if key_click; then
         sh "$MODPATH/scripts/refresh_follow_system.sh"
     else
         echo "0" > "$CONFIG_DIR/enable_refresh_follow"
+        echo "                        ✔"
+    fi
+
+    echo ""
+    echo "-        是否启用 [息屏冻结]（默认关闭）"
+    echo "  ⚠ 非豁免三方应用息屏后可能被冻结/清理（省电；B 站等默认不豁免）"
+    echo "  可随时在 WebUI/菜单 [9] 立即启用、[10] 即时恢复"
+    echo "          音量↑:[启用]│音量↓:[跳过(推荐)]"
+    if key_click; then
+        echo "              ✔"
+        echo "1" > "$CONFIG_DIR/enable_screen_off_freeze"
+        sh "$MODPATH/scripts/screen_off_freeze.sh" apply
+    else
+        echo "0" > "$CONFIG_DIR/enable_screen_off_freeze"
         echo "                        ✔"
     fi
 else

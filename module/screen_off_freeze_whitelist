@@ -1,0 +1,13 @@
+# 息屏冻结豁免名单（每行一个包名；deviceidle 电池白名单天然豁免，无需重复）
+# 说明：
+#   - 音乐应用必须豁免：PowerKeeper 息屏清理(kill)不看前台服务，播放中的音乐 20~30 分钟后会被杀
+#   - 即时通讯保持消息可达；Termux 为开发者环境（若已在系统电池白名单则已豁免）
+#   - B 站默认【不】豁免：本模块息屏冻结的目标正是解决 B 站夜间偷跑；如需 B 站夜间存活，加一行 tv.danmaku.bili
+com.tencent.mm
+com.tencent.mobileqq
+com.netease.cloudmusic
+com.tencent.qqmusic
+com.ximalaya.ting.android
+com.kugou.android
+cn.kuwo.player
+com.termux

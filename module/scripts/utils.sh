@@ -133,8 +133,10 @@ is_valid_pkg() {
 }
 
 # 从 stdin 读取（空格或换行分隔），去重并过滤非法包名，每行输出一个
+# 注意：先剔除注释行（# 开头，含前导空白），否则注释文字会被按空格拆成
+# 合法形态的 token（如 "B"、"tv.danmaku.bili"）混入名单
 normalize_pkgs() {
-    tr -d '\r' 2>/dev/null | tr ' ' '\n' 2>/dev/null | sed '/^[[:space:]]*$/d' | while read -r pkg; do
+    tr -d '\r' 2>/dev/null | sed 's/^[[:space:]]*#.*$//' | tr ' ' '\n' 2>/dev/null | sed '/^[[:space:]]*$/d' | while read -r pkg; do
         if is_valid_pkg "$pkg"; then
             echo "$pkg"
         fi
@@ -242,6 +244,18 @@ ensure_module_lock() {
         trap 'rm -rf "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
     fi
     MODULE_LOCKED=1
+}
+
+# 提前释放模块锁（供需要先持锁写库、再调用会自锁的子脚本的场景，避免自锁死锁）
+module_unlock() {
+    if [ "$MODULE_LOCKED" = "1" ]; then
+        if command -v flock >/dev/null 2>&1; then
+            exec 9>&- 2>/dev/null || true
+        else
+            rm -rf "$MODULE_LOCK_DIR" 2>/dev/null || true
+        fi
+        MODULE_LOCKED=0
+    fi
 }
 
 # 重启 PowerKeeper，促使它重新读取云控数据库（可选）

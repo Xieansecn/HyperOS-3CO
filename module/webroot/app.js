@@ -4,7 +4,7 @@
   var api = window.ksuApi;
 
   /* ---------- 常量 ---------- */
-  var FALLBACK_MOD_ID = 'HyperOS-3CO';
+  var FALLBACK_MOD_ID = 'Asphyxia';
   var MOD_DIR = '/data/adb/modules/' + FALLBACK_MOD_ID;
   var AUTO_REFRESH_MS = 60000;
   var REFRESH_DELAY_MS = 500;
@@ -39,6 +39,18 @@
       label: '禁用 GPU Boost（高通）',
       desc: 'service.sh 启动时锁定 GPU 节点（下次开机生效）',
       def: 'false'
+    },
+    enable_screen_off_freeze: {
+      label: '息屏冻结（省电）',
+      desc: '开机把非豁免三方应用切为可冻结态，息屏后被冻结/清理；豁免=deviceidle 白名单+白名单文件（下次开机生效）',
+      def: '0',
+      hot: true
+    },
+    enable_kernel_freeze: {
+      label: '内核级冻结（实验）',
+      desc: '写入 FrozenControlStatus 启用进程冻结（息屏 ~60s 冻结、唤醒秒解冻）；依赖系统冻结器（下次开机生效）',
+      def: '0',
+      hot: true
     }
   };
 
@@ -51,7 +63,9 @@
     { id: 5, label: '查看当前云控状态', cmd: 'status' },
     { id: 6, label: '重启 PowerKeeper', cmd: 'restart_pk' },
     { id: 7, label: '备份云控数据库', cmd: 'backup' },
-    { id: 8, label: '恢复充电', cmd: 'restore_charging', confirm: true, danger: true }
+    { id: 8, label: '恢复充电', cmd: 'restore_charging', confirm: true, danger: true },
+    { id: 9, label: '息屏冻结（立即）', cmd: 'freeze', confirm: true },
+    { id: 10, label: '即时恢复', cmd: 'unfreeze', confirm: true, danger: true }
   ];
 
   var state = {
@@ -158,7 +172,7 @@
 
   /* ---------- 状态解析 ---------- */
   function parseStatus(text) {
-    var out = { flags: {}, battery: null, joyose: null, noRestrict: null, hr: null, deviceidle: null, backup: null };
+    var out = { flags: {}, battery: null, joyose: null, noRestrict: null, hr: null, deviceidle: null, backup: null, freezeState: null };
     var lines = String(text).split('\n');
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
@@ -176,6 +190,8 @@
         out.deviceidle = m[1];
       } else if ((m = line.match(/battery: status=(.+?) capacity=(\S+)% temp=(\S+) current=(\S+)uA voltage=(\S+)uV/))) {
         out.battery = { status: m[1].trim(), capacity: m[2], temp: m[3], current: m[4], voltage: m[5] };
+      } else if ((m = line.match(/^\s*状态: (\S+)/))) {
+        out.freezeState = m[1];
       } else if ((m = line.match(/^(cloud_configure|user_configure|joyose_teg|highrefreshrate)_\d{8}-\d{6}_/))) {
         out.backup = (parseInt(out.backup || '0', 10) + 1).toString();
       }
@@ -210,6 +226,7 @@
     setStat('s-hr', s.hr);
     setStat('s-deviceidle', s.deviceidle);
     setStat('s-backup', s.backup);
+    setStat('s-freeze', s.freezeState === 'applied' ? '开' : (s.freezeState === 'restored' ? '关' : '-'));
     var t2 = $('overview-time');
     if (t2) t2.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   }
@@ -565,7 +582,7 @@
     var ts = '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
       '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) +
       '-' + Math.random().toString(36).slice(2, 6);
-    var path = '/sdcard/Download/HyperOS-3CO_日志_' + ts + '.txt';
+    var path = '/sdcard/Download/定制优化_日志_' + ts + '.txt';
     var delim = 'KSULOG_EOF_' + Math.random().toString(36).slice(2, 10);
     var cmd = "cat > '" + path + "' <<'" + delim + "'\n" + text + "\n" + delim;
 
