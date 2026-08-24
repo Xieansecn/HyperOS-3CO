@@ -11,7 +11,7 @@ HR_DB="${HR_DB:-/data/data/com.miui.powerkeeper/databases/highrefreshrate.db}"
 
 echo "========== 模块与开关 =========="
 grep -E '^(name|version)=' "$MODDIR/module.prop" 2>/dev/null || echo "module.prop 缺失"
-for f in enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze; do
+for f in enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze enable_nightly_freeze freeze_start_time freeze_end_time; do
     if [ -f "$MODDIR/config/$f" ]; then
         echo "  $f = $(cat "$MODDIR/config/$f")"
     else
@@ -71,6 +71,8 @@ echo "  sleep_mode_cloud=$("$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name
 echo "  FrozenControlStatus=$("$SQLITE" "$CC_DB" "SELECT IFNULL(configureParam,'(缺失)') FROM GlobalFeatureTable WHERE configureName='FrozenControlStatus';" 2>/dev/null)"
 echo "  FrozenNewWhiteList 长度=$("$SQLITE" "$CC_DB" "SELECT length(configureParam) FROM GlobalFeatureTable WHERE configureName='FrozenNewWhiteList';" 2>/dev/null)"
 echo "  userTable: miuiAuto=$("$SQLITE" "$UC_DB" "SELECT COUNT(*) FROM userTable WHERE bgControl='miuiAuto';" 2>/dev/null)  noRestrict=$("$SQLITE" "$UC_DB" "SELECT COUNT(*) FROM userTable WHERE bgControl='noRestrict';" 2>/dev/null)"
+echo "  用户白名单数量: $(wc -l < "$MODDIR/config/screen_off_freeze_whitelist_user" 2>/dev/null || echo 0)"
+echo "  夜间标记: $(test -f "$MODDIR/config/.nightly_active" && echo active || echo idle)"
 echo "  状态: $(cat "$MODDIR/config/.screen_off_freeze_state" 2>/dev/null || echo 未执行过)"
 
 echo ""

@@ -292,6 +292,33 @@ header .sub {
   white-space: nowrap;
 }
 
+/* ---------- 定时窗口（夜间定时息屏冻结） ---------- */
+.time-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.time-input {
+  width: 96px;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 14px;
+  color-scheme: light;
+}
+.time-input:focus { outline: none; border-color: var(--primary); }
+.time-input:disabled { opacity: 0.4; }
+.time-dash { color: var(--on-surface-variant); }
+:root[data-theme="dark"] .time-input { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .time-input { color-scheme: dark; }
+}
+
 /* ---------- M3 开关（switch） ---------- */
 .switch { position: relative; width: 52px; height: 32px; flex: 0 0 auto; }
 .switch input {
@@ -411,7 +438,7 @@ header .sub {
 .backup-item .b-size { color: var(--on-surface-variant); font-size: 11px; flex: 0 0 auto; }
 
 /* 删除（text 按钮，错误色） */
-.b-del {
+.b-del, .wl-del {
   appearance: none;
   border: none;
   background: transparent;
@@ -424,8 +451,49 @@ header .sub {
   cursor: pointer;
   flex: 0 0 auto;
 }
-.b-del:hover { background: var(--error-container); }
-.b-del:disabled { opacity: 0.4; }
+.b-del:hover, .wl-del:hover { background: var(--error-container); }
+.b-del:disabled, .wl-del:disabled { opacity: 0.4; }
+
+/* ---------- 白名单豁免冻结 ---------- */
+.wl-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 4px;
+}
+.wl-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 14px;
+}
+.wl-input:focus { outline: none; border-color: var(--primary); }
+.wl-input::placeholder { color: var(--on-surface-variant); }
+.wl-input:disabled { opacity: 0.4; }
+.wl-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--outline-variant);
+}
+.wl-item:first-child { border-top: none; }
+.wl-item .wl-name {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---------- 日志 ---------- */
 .log-tools {

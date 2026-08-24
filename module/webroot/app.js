@@ -51,6 +51,12 @@
       desc: '写入 FrozenControlStatus 启用进程冻结（息屏 ~60s 冻结、唤醒秒解冻）；依赖系统冻结器（下次开机生效）',
       def: '0',
       hot: true
+    },
+    enable_nightly_freeze: {
+      label: '夜间定时息屏冻结',
+      desc: '窗口内自动冻结、窗口外自动恢复；需开启「息屏冻结（省电）」配合（下次开机生效）',
+      def: '0',
+      hot: true
     }
   };
 
@@ -172,14 +178,26 @@
 
   /* ---------- 状态解析 ---------- */
   function parseStatus(text) {
-    var out = { flags: {}, battery: null, joyose: null, noRestrict: null, hr: null, deviceidle: null, backup: null, freezeState: null };
+    var out = { flags: {}, nightly: null, freezeStart: null, freezeEnd: null, battery: null, joyose: null, noRestrict: null, hr: null, deviceidle: null, backup: null, freezeState: null };
     var lines = String(text).split('\n');
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       var m;
-      /* 只认 TOGGLE_DEFS 中的键；gpu_boost 未设置时归一为 false */
-      if ((m = line.match(/^\s*([a-z_]+)\s*=\s*(\S+)/)) && TOGGLE_DEFS[m[1]]) {
-        out.flags[m[1]] = (m[2] === '(未设置/默认)') ? 'false' : m[2];
+      /* 通用 key=value 捕获：除 name/version 等已知非开关行外全部存入 flags，
+         新增开关/定时字段无需再同步白名单；gpu_boost 未设置时归一为 false，
+         freeze_* 三行同时映射到 out 供定时窗口使用 */
+      if ((m = line.match(/^\s*([a-z_]+)\s*=\s*(\S+)/)) && m[1] !== 'name' && m[1] !== 'version') {
+        var v = (m[2] === '(未设置/默认)') ? 'false' : m[2];
+        out.flags[m[1]] = v;
+        if (m[1] === 'enable_nightly_freeze') {
+          out.nightly = v;
+        } else if (m[1] === 'freeze_start_time') {
+          out.freezeStart = v;
+          out.flags.freezeStart = v;
+        } else if (m[1] === 'freeze_end_time') {
+          out.freezeEnd = v;
+          out.flags.freezeEnd = v;
+        }
       } else if ((m = line.match(/background_freeze_whitelist 数量:\s*(\d+)/))) {
         out.joyose = m[1];
       } else if ((m = line.match(/userTable noRestrict 数量:\s*(\d+)/))) {
@@ -289,6 +307,84 @@
       row.appendChild(sw);
       wrap.appendChild(row);
     });
+
+    /* 定时窗口行：窗口内自动冻结、窗口外自动恢复 */
+    var start = normTime(flags.freezeStart || flags.freeze_start_time, '23:00');
+    var end = normTime(flags.freezeEnd || flags.freeze_end_time, '07:00');
+
+    var row = document.createElement('div');
+    row.className = 'toggle-row';
+    var txt = document.createElement('div');
+    txt.className = 'txt';
+    var name = document.createElement('div');
+    name.className = 't-name';
+    name.textContent = '定时窗口';
+    var desc = document.createElement('div');
+    desc.className = 't-desc';
+    desc.textContent = '窗口内自动冻结、窗口外自动恢复；需开启「夜间定时息屏冻结」配合（下次开机生效）';
+    txt.appendChild(name);
+    txt.appendChild(desc);
+
+    var timeWrap = document.createElement('div');
+    timeWrap.className = 'time-wrap';
+    var tStart = document.createElement('input');
+    tStart.type = 'time';
+    tStart.className = 'time-input';
+    tStart.value = start;
+    if (state.busy) tStart.disabled = true;
+    tStart.addEventListener('change', function () { setTimeWindow('freeze_start_time', tStart.value, tStart); });
+    var dash = document.createElement('span');
+    dash.className = 'time-dash';
+    dash.textContent = '–';
+    var tEnd = document.createElement('input');
+    tEnd.type = 'time';
+    tEnd.className = 'time-input';
+    tEnd.value = end;
+    if (state.busy) tEnd.disabled = true;
+    tEnd.addEventListener('change', function () { setTimeWindow('freeze_end_time', tEnd.value, tEnd); });
+    timeWrap.appendChild(tStart);
+    timeWrap.appendChild(dash);
+    timeWrap.appendChild(tEnd);
+
+    row.appendChild(txt);
+    row.appendChild(timeWrap);
+    wrap.appendChild(row);
+  }
+
+  function normTime(v, def) {
+    return (/^\d{2}:\d{2}$/.test(v)) ? v : def;
+  }
+
+  function setTimeWindow(key, value, input) {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      return;
+    }
+    if (!/^\d{2}:\d{2}$/.test(value)) {
+      logErr('非法时间值，已拒绝: ' + value);
+      return;
+    }
+    input.disabled = true;
+    logWarn('[config] 设置 ' + key + '=' + value);
+    api.exec(shCmd('config_set ' + key + ' ' + value))
+      .then(function (res) {
+        if (destroyed) return;
+        if (input.isConnected) input.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || ('config_set 失败 (errno=' + res.errno + ')'));
+          toast('设置失败');
+          return;
+        }
+        state.flags[key] = value;
+        if (res.stdout) logLine(res.stdout.trim());
+        toast(key + ' = ' + value);
+        setTimeout(refreshStatus, REFRESH_DELAY_MS);
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        if (input.isConnected) input.disabled = false;
+        logErr('config_set 异常: ' + ((e && e.message) || e));
+      });
   }
 
   function setToggle(key, checked, input) {
@@ -556,6 +652,120 @@
       });
   }
 
+  /* ---------- 白名单豁免冻结 ---------- */
+  function refreshWhitelist() {
+    var listEl = $('wl-list');
+    var sumEl = $('wl-summary');
+    if (!listEl || !sumEl) return;
+    api.exec(shCmd('whitelist_list'))
+      .then(function (res) {
+        if (destroyed) return;
+        var pkgs = [];
+        String(res.stdout).split('\n').forEach(function (line) {
+          var p = line.trim();
+          if (p && /^[A-Za-z0-9_.]+$/.test(p)) pkgs.push(p);
+        });
+        sumEl.textContent = pkgs.length ? pkgs.length + ' 个' : '';
+        listEl.innerHTML = '';
+        if (!pkgs.length) {
+          listEl.innerHTML = '<div class="log-empty">暂无豁免应用</div>';
+          return;
+        }
+        pkgs.forEach(function (pkg) {
+          var row = document.createElement('div');
+          row.className = 'wl-item';
+          var nm = document.createElement('span');
+          nm.className = 'wl-name';
+          nm.textContent = pkg;
+          nm.title = pkg;
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'wl-del';
+          del.textContent = '移除';
+          del.addEventListener('click', function () { removeWhitelist(pkg, del); });
+          row.appendChild(nm);
+          row.appendChild(del);
+          listEl.appendChild(row);
+        });
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        listEl.innerHTML = '<div class="log-empty">读取白名单失败</div>';
+        logErr('白名单列表异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  function addWhitelist() {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      return;
+    }
+    var input = $('wl-input');
+    if (!input) return;
+    var pkg = input.value.trim();
+    if (!pkg) {
+      toast('请输入包名');
+      return;
+    }
+    if (!/^[A-Za-z0-9_.]+$/.test(pkg) || pkg.charAt(0) === '.' || pkg.slice(-1) === '.' || pkg.indexOf('..') >= 0) {
+      logErr('非法包名，已拒绝: ' + pkg);
+      return;
+    }
+    var btn = $('wl-add-btn');
+    if (btn) btn.disabled = true;
+    logWarn('[whitelist] 添加 ' + pkg);
+    api.exec(shCmd('whitelist_add ' + pkg))
+      .then(function (res) {
+        if (destroyed) return;
+        if (btn) btn.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || ('whitelist_add 失败 (errno=' + res.errno + ')'));
+          toast('添加失败');
+          return;
+        }
+        if (res.stdout) logLine(res.stdout.trim());
+        input.value = '';
+        toast('已添加豁免');
+        refreshWhitelist();
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        if (btn) btn.disabled = false;
+        logErr('添加异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  function removeWhitelist(pkg, delBtn) {
+    if (state.busy) {
+      toast('有任务正在执行，请稍候');
+      return;
+    }
+    if (!/^[A-Za-z0-9_.]+$/.test(pkg) || pkg.charAt(0) === '.' || pkg.slice(-1) === '.' || pkg.indexOf('..') >= 0) {
+      logErr('非法包名，已拒绝: ' + pkg);
+      return;
+    }
+    if (!window.confirm('确认将 ' + pkg + ' 移出豁免白名单？')) return;
+    delBtn.disabled = true;
+    api.exec(shCmd('whitelist_remove ' + pkg))
+      .then(function (res) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || '移除失败');
+          toast('移除失败');
+          return;
+        }
+        if (res.stdout) logLine(res.stdout.trim());
+        toast('已移除');
+        refreshWhitelist();
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        logErr('移除异常: ' + ((e && e.message) || e));
+      });
+  }
+
   /* ---------- 日志导出 ---------- */
   function collectLogText() {
     var box = ensureLog();
@@ -672,6 +882,17 @@
     if (btnRefresh) btnRefresh.addEventListener('click', refreshStatus);
     var btnExport = $('btn-export-log');
     if (btnExport) btnExport.addEventListener('click', exportLog);
+    var wlAddBtn = $('wl-add-btn');
+    if (wlAddBtn) wlAddBtn.addEventListener('click', addWhitelist);
+    var wlInput = $('wl-input');
+    if (wlInput) {
+      wlInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addWhitelist();
+        }
+      });
+    }
     var btnTheme = $('btn-theme');
     if (btnTheme) btnTheme.addEventListener('click', cycleTheme);
     applyTheme(getThemePref());
@@ -703,6 +924,7 @@
     loadModuleInfo();
     refreshStatus();
     refreshBackups();
+    refreshWhitelist();
     autoTimer = setInterval(autoRefresh, AUTO_REFRESH_MS);
   }
 

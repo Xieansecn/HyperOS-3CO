@@ -141,13 +141,15 @@ menu_label() {
 #         version | help
 # 无参数时进入音量键交互菜单（原行为不变）。
 
-CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze"
+CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze enable_nightly_freeze freeze_start_time freeze_end_time"
 
 flag_default() {
     case "$1" in
         enable_battery_sync)  echo "1" ;;
         enable_refresh_follow) echo "1" ;;
         gpu_boost)            echo "false" ;;
+        freeze_start_time)    echo "23:00" ;;
+        freeze_end_time)      echo "07:00" ;;
         *)                    echo "0" ;;
     esac
 }
@@ -193,11 +195,25 @@ cli_config_set() {
             return 1
             ;;
     esac
-    case "$2" in
-        0|1|true|false) ;;
+    case "$1" in
+        freeze_start_time|freeze_end_time)
+            # 时间键：仅接受 HH:MM
+            case "$2" in
+                [01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;;
+                *)
+                    echo "[action] 非法时间: $2 (期望 HH:MM，如 23:00)" >&2
+                    return 1
+                    ;;
+            esac
+            ;;
         *)
-            echo "[action] 非法取值: $2 (允许 0/1/true/false)" >&2
-            return 1
+            case "$2" in
+                0|1|true|false) ;;
+                *)
+                    echo "[action] 非法取值: $2 (允许 0/1/true/false)" >&2
+                    return 1
+                    ;;
+            esac
             ;;
     esac
     mkdir -p "$MODDIR/config"
@@ -257,9 +273,41 @@ cli_dispatch() {
                 return 1
             fi
             ;;
+        whitelist_list)
+            if [ -f "$MODDIR/config/screen_off_freeze_whitelist_user" ]; then
+                cat "$MODDIR/config/screen_off_freeze_whitelist_user"
+            fi
+            ;;
+        whitelist_add)
+            is_valid_pkg "$2" || { echo "[action] 非法包名: $2" >&2; return 1; }
+            mkdir -p "$MODDIR/config"
+            WL_FILE="$MODDIR/config/screen_off_freeze_whitelist_user"
+            touch "$WL_FILE"
+            if grep -qxF "$2" "$WL_FILE"; then
+                echo "[action] 已在豁免名单: $2"
+            else
+                echo "$2" >>"$WL_FILE"
+                echo "[action] 已添加豁免: $2"
+            fi
+            ;;
+        whitelist_remove)
+            WL_FILE="$MODDIR/config/screen_off_freeze_whitelist_user"
+            if [ ! -f "$WL_FILE" ]; then
+                echo "[action] 豁免名单为空" >&2
+                return 1
+            fi
+            if grep -qxF "$2" "$WL_FILE"; then
+                grep -vxF "$2" "$WL_FILE" >"$WL_FILE.tmp.$$" || true
+                mv -f "$WL_FILE.tmp.$$" "$WL_FILE"
+                echo "[action] 已移除豁免: $2"
+            else
+                echo "[action] 不在豁免名单: $2" >&2
+                return 1
+            fi
+            ;;
         help|-h|--help)
             grep '^# 用法' "$0" | head -n 1 | sed 's/^# *//'
-            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze config config_get config_set backup_list backup_delete version"
+            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze whitelist_list whitelist_add whitelist_remove config config_get config_set backup_list backup_delete version"
             ;;
         *)
             ID="$(cli_action_id "$1")"

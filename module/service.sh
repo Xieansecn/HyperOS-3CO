@@ -128,6 +128,12 @@ if flag_enabled enable_screen_off_freeze 0; then
     sh "$MODDIR/scripts/screen_off_freeze.sh" apply
 fi
 
+# ---- 夜间定时息屏冻结守护（默认关） ----
+if flag_enabled enable_nightly_freeze 0; then
+    log "[module] 启动夜间定时息屏冻结守护（窗口 $(cat "$MODDIR/config/freeze_start_time" 2>/dev/null || echo 23:00)-$(cat "$MODDIR/config/freeze_end_time" 2>/dev/null || echo 07:00)）..."
+    nohup sh "$MODDIR/scripts/freeze_scheduler.sh" >/dev/null 2>&1 &
+fi
+
 # ---- 收尾 ----
 # 若任一写库功能已执行，重启 PowerKeeper 一次，让内存策略与库一致（C5）
 if flag_enabled enable_battery_sync 1 || flag_enabled enable_static_protect 0 || flag_enabled enable_refresh_follow 1 || flag_enabled enable_screen_off_freeze 0; then

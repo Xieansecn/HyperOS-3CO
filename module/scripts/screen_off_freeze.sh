@@ -21,11 +21,12 @@ PK_RESTART="${PK_RESTART:-0}"
 WHITELIST_FILE="$MODDIR/screen_off_freeze_whitelist"
 STATE_FILE="$MODDIR/config/.screen_off_freeze_state"
 
-# 豁免集：deviceidle user 白名单 + 白名单文件 + 系统组件兜底
+# 豁免集：deviceidle user 白名单 + 内置白名单文件 + 用户白名单(config) + 系统组件兜底
 get_exempt_apps() {
     {
         dumpsys deviceidle whitelist 2>/dev/null | awk -F',' '$1 == "user" {print $2}'
         cat "$WHITELIST_FILE" 2>/dev/null
+        cat "$MODDIR/config/screen_off_freeze_whitelist_user" 2>/dev/null
         echo "com.miui.powerkeeper"
         echo "com.xiaomi.joyose"
     } | normalize_pkgs

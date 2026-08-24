@@ -16,6 +16,7 @@ set_perm "$MODPATH/scripts/backup_cloud_db.sh" 0 0 0755
 set_perm "$MODPATH/scripts/restore_charging.sh" 0 0 0755
 set_perm "$MODPATH/scripts/check_status.sh" 0 0 0755
 set_perm "$MODPATH/scripts/screen_off_freeze.sh" 0 0 0755
+set_perm "$MODPATH/scripts/freeze_scheduler.sh" 0 0 0755
 set_perm "$MODPATH/screen_off_freeze_whitelist" 0 0 0644
 set_perm "$MODPATH/uninstall.sh" 0 0 0755
 set_perm "$MODPATH/scripts/utils.sh" 0 0 0644
