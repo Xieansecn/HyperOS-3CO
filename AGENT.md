@@ -37,7 +37,7 @@ python3 db_inspect.py  # 查看云控库
    - SQL 经 `sqlite3_x` 执行（自带 busy_timeout 10s + `.bail on`）。
    - 写前调用 `backup_db` 备份（保留最近 5 份）。
    - 临时 SQL 文件名必须带 `.$$`（PID）后缀，用后删除。
-4. **`module.prop` 元信息**：`id=HyperOS-3CO`、`name=HyperOS-3CO`、`author=CoolApk@苏疫杆菌`；不要随意改 id（影响运行时路径 `/data/adb/modules/HyperOS-3CO`）。
+4. **`module.prop` 元信息**：`id=HyperOS-3CO`、`name=HyperOS-3CO`、`author=Xieansecn & Deepseek Harness & CoolApk@苏疫杆菌`；不要随意改 id（影响运行时路径 `/data/adb/modules/HyperOS-3CO`）。
 5. **版本号规则**：功能变更按 `YYYYMMDD` 递增（当前 260825），并同步 `module.prop`、`build_module.sh` / `verify_module.sh` 中的 zip 名、README 版本说明。
 6. **锁路径**：`utils.sh` 已按模块 id 派生统一锁文件 `/data/adb/modules/.<模块id>.module.lock`，安装期（modules_update）与运行期（modules）共用，保证安装与旧实例互斥。
 7. **toybox 兼容陷阱**：`flock` 在 toybox 上仅支持 `flock [-sxun] fd`（无 `-w`），统一用 `flock -n <fd>` + 轮询实现超时（见 `utils.sh::flock_wait`）；不要用 GNU 独有参数。

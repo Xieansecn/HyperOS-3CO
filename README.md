@@ -1,6 +1,6 @@
 # HyperOS-3CO
 
-> 版本：v14（260825）｜基于酷安作者「苏疫杆菌」模块原型二改
+> 版本：v14（260825）｜作者：Xieansecn & Deepseek Harness & 酷安「苏疫杆菌」
 
 基于酷安作者「苏疫杆菌」模块原型二改的 **MIUI / HyperOS Joyose 云控定制模块**，适配 Redmi K70 Pro（manet）。
 

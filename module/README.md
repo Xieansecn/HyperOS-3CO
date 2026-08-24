@@ -46,7 +46,7 @@
 > - **开关**：五个 `config/` 开关实时读写；
 > - **操作**：菜单 1-8 全部动作 + 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
 > - **日志**：占满整页的实时日志终端，可**导出 txt 到 Download**。
-> - 全部功能仍经 `action.sh <命令>` 驱动；作者署名 Xieansecn & Deepseek Harness。
+> - 全部功能仍经 `action.sh <命令>` 驱动；作者署名 Xieansecn & Deepseek Harness & CoolApk@苏疫杆菌。
 
 > **动态白名单（260824）**：Joyose 云控写入时，白名单类列表（`game_list` / `support_app` / `background_freeze_whitelist`）动态替换为**设备上全部第三方应用**（`pm list packages -3`）；获取失败时保留原名单。逐游戏调参列表（`migt` / `frc_game_params` 等）保持不变。
 
