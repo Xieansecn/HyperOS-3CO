@@ -8,7 +8,7 @@
   var MOD_DIR = '/data/adb/modules/' + FALLBACK_MOD_ID;
   var AUTO_REFRESH_MS = 60000;
   var REFRESH_DELAY_MS = 500;
-  var SPAWN_TIMEOUT_MS = 120000;
+  var SPAWN_TIMEOUT_MS = 300000;
   var LOG_MAX_NODES = 1600;
 
   /* 5 个开关，与 action.sh CONFIG_KEYS / check_status.sh 输出对应 */
@@ -846,9 +846,9 @@
   /* ---------- 重启菜单 ---------- */
   var RESTART_ACTIONS = {
     powerkeeper: { label: '重启 PowerKeeper', cmd: 'restart_pk', confirm: false },
-    joyose: { label: '重启 Joyose', cmd: '', confirm: false },
-    systemui: { label: '重启 SystemUI', cmd: '', confirm: false },
-    reboot: { label: '重启手机', cmd: '', confirm: true }
+    joyose: { label: '重启 Joyose', cmd: 'restart_joyose', confirm: false },
+    systemui: { label: '重启 SystemUI', cmd: 'restart_systemui', confirm: false },
+    reboot: { label: '重启手机', cmd: 'reboot', confirm: true }
   };
 
   function showRestartSheet() {
@@ -872,12 +872,8 @@
     var cmd = '';
     if (name === 'powerkeeper') {
       cmd = shCmd('restart_pk');
-    } else if (name === 'joyose') {
-      cmd = 'am force-stop com.xiaomi.joyose && am broadcast -a android.intent.action.BOOT_COMPLETED -p com.xiaomi.joyose';
-    } else if (name === 'systemui') {
-      cmd = 'am force-stop com.android.systemui';
-    } else if (name === 'reboot') {
-      cmd = 'reboot';
+    } else if (def.cmd) {
+      cmd = shCmd(def.cmd);
     }
     if (!cmd) return;
     api.exec(cmd)

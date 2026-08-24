@@ -99,16 +99,16 @@ draw_menu() {
 
 run_selected() {
     case "$1" in
-        1) run_joyose ;;
-        2) run_sync_battery ;;
-        3) run_powerkeeper ;;
-        4) run_refresh_follow_system ;;
+        1) run_joyose; return $? ;;
+        2) run_sync_battery; return $? ;;
+        3) run_powerkeeper; return $? ;;
+        4) run_refresh_follow_system; return $? ;;
         5) show_status ;;
         6) run_restart_pk ;;
-        7) run_backup_db ;;
+        7) run_backup_db; return $? ;;
         8) run_restore_charging ;;
-        9) run_screen_off_freeze ;;
-        10) run_screen_off_unfreeze ;;
+        9) run_screen_off_freeze; return $? ;;
+        10) run_screen_off_unfreeze; return $? ;;
         11) echo "[action] 退出"; exit 0 ;;
         *) echo "[action] 无效选择" ;;
     esac
@@ -172,8 +172,8 @@ cli_action_id() {
 }
 
 cli_config_get() {
-    case "$CONFIG_KEYS" in
-        *"$1"*)
+    case " $CONFIG_KEYS " in
+        *" $1 "*)
             if [ -f "$MODDIR/config/$1" ]; then
                 echo "$1=$(cat "$MODDIR/config/$1")"
             else
@@ -188,8 +188,8 @@ cli_config_get() {
 }
 
 cli_config_set() {
-    case "$CONFIG_KEYS" in
-        *"$1"*) ;;
+    case " $CONFIG_KEYS " in
+        *" $1 "*) ;;
         *)
             echo "[action] 未知配置项: $1" >&2
             return 1
@@ -273,6 +273,16 @@ cli_dispatch() {
                 return 1
             fi
             ;;
+        restart_joyose)
+            exec_system "am force-stop com.xiaomi.joyose"
+            exec_system "am broadcast -a android.intent.action.BOOT_COMPLETED -p com.xiaomi.joyose"
+            ;;
+        restart_systemui)
+            exec_system "am force-stop com.android.systemui"
+            ;;
+        reboot)
+            exec_system "reboot"
+            ;;
         whitelist_list)
             if [ -f "$MODDIR/config/screen_off_freeze_whitelist_user" ]; then
                 cat "$MODDIR/config/screen_off_freeze_whitelist_user"
@@ -280,14 +290,14 @@ cli_dispatch() {
             ;;
         whitelist_add)
             is_valid_pkg "$2" || { echo "[action] 非法包名: $2" >&2; return 1; }
+            ensure_module_lock
             mkdir -p "$MODDIR/config"
             WL_FILE="$MODDIR/config/screen_off_freeze_whitelist_user"
             touch "$WL_FILE"
             if grep -qxF "$2" "$WL_FILE"; then
                 echo "[action] 已在豁免名单: $2"
             else
-                echo "$2" >>"$WL_FILE"
-                echo "[action] 已添加豁免: $2"
+                echo "$2" >>"$WL_FILE" && echo "[action] 已添加豁免: $2" || { echo "[action] 写入失败" >&2; return 1; }
             fi
             ;;
         whitelist_remove)
@@ -393,7 +403,7 @@ cli_dispatch() {
             grep '^# 用法' "$0" | head -n 1 | sed 's/^# *//'
             echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze"
     echo "    whitelist_list whitelist_add whitelist_remove wl_sys_list wl_sys_add wl_sys_remove"
-    echo "    config config_get config_set backup_list backup_delete version"
+    echo "    restart_joyose restart_systemui reboot config config_get config_set backup_list backup_delete version"
             ;;
         *)
             ID="$(cli_action_id "$1")"
@@ -407,6 +417,7 @@ cli_dispatch() {
             fi
             echo "[action] 已选择: [$ID] $(menu_label "$ID")"
             run_selected "$ID"
+            return $?
             ;;
     esac
 }

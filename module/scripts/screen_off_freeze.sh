@@ -136,8 +136,10 @@ case "$1" in
         exit 1
         ;;
 esac
+RC=$?
 
 if [ "$PK_RESTART" = "1" ] && [ "${DRY_RUN:-0}" != "1" ]; then
     restart_powerkeeper
 fi
 echo "[screen-off-freeze] done"
+exit "$RC"
