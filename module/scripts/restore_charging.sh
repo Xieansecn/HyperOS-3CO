@@ -90,18 +90,19 @@ do_sys "am broadcast -a android.intent.action.BOOT_COMPLETED -p com.miui.powerke
 # 5) 重新应用防冻结定制（幂等）：
 #    - 同步电池白名单（内部会禁用 Joyose 云控接收器，防止官方覆盖）
 #    - 若开启了静态保护则一并重跑
+RESTORE_FAIL=0
 if [ "$DRY_RUN" = "1" ]; then
     echo "[charging] (dry-run) 跳过重新应用防冻结定制"
 else
     echo "[charging] 重新同步电池优化白名单到云控（防止官方冻结策略覆盖）..."
-    sh "$MODDIR/scripts/sync_battery_whitelist.sh"
+    sh "$MODDIR/scripts/sync_battery_whitelist.sh" || RESTORE_FAIL=1
     if flag_enabled enable_static_protect 0; then
         echo "[charging] 重新应用 PowerKeeper 静态保护（全部第三方应用）..."
-        sh "$MODDIR/scripts/powerkeeper_patch.sh"
+        sh "$MODDIR/scripts/powerkeeper_patch.sh" || RESTORE_FAIL=1
     fi
     if flag_enabled enable_screen_off_freeze 0; then
         echo "[charging] 重新应用息屏冻结（防止恢复充电撤销冻结）..."
-        sh "$MODDIR/scripts/screen_off_freeze.sh" apply
+        sh "$MODDIR/scripts/screen_off_freeze.sh" apply || RESTORE_FAIL=1
     fi
 fi
 
@@ -121,3 +122,7 @@ for t in /sys/class/power_supply/*; do
 done
 echo "  热控进程: $(ps -A 2>/dev/null | grep -E 'thermal-engine|mi_thermald|mimd' | grep -v grep | awk '{print $NF}' | tr '\n' ' ')"
 echo "[charging] 已保持 Joyose 云控接收器禁用，官方冻结策略不会覆盖防冻结定制。"
+if [ "$RESTORE_FAIL" = "1" ]; then
+    echo "[charging] 部分步骤失败，请查看上方日志" >&2
+    exit 1
+fi

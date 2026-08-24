@@ -138,7 +138,7 @@ menu_label() {
 #         status|5  restart_pk|6  backup|7  restore_charging|8  exit|9
 #         config | config_get <key> | config_set <key> <值>
 #         backup_list | backup_delete <文件名> | freeze | unfreeze
-#         version | help
+#         restart_joyose | restart_systemui | reboot | version | help
 # 无参数时进入音量键交互菜单（原行为不变）。
 
 CONFIG_KEYS="enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze enable_nightly_freeze freeze_start_time freeze_end_time"
@@ -274,13 +274,16 @@ cli_dispatch() {
             fi
             ;;
         restart_joyose)
+            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
             exec_system "am force-stop com.xiaomi.joyose"
             exec_system "am broadcast -a android.intent.action.BOOT_COMPLETED -p com.xiaomi.joyose"
             ;;
         restart_systemui)
+            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
             exec_system "am force-stop com.android.systemui"
             ;;
         reboot)
+            [ -z "$2" ] || { echo "[action] 该命令不接受参数" >&2; return 1; }
             exec_system "reboot"
             ;;
         whitelist_list)

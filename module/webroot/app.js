@@ -11,7 +11,7 @@
   var SPAWN_TIMEOUT_MS = 300000;
   var LOG_MAX_NODES = 1600;
 
-  /* 5 个开关，与 action.sh CONFIG_KEYS / check_status.sh 输出对应 */
+  /* 8 个开关 + 定时窗口，与 action.sh CONFIG_KEYS / check_status.sh 输出对应 */
   var TOGGLE_DEFS = {
     enable_battery_sync: {
       label: '电池白名单同步',
@@ -752,7 +752,7 @@
         }
         if (res.stdout) logLine(res.stdout.trim());
         input.value = '';
-        toast('已添加');
+        toast(res.stdout.indexOf('已在') >= 0 ? '已在名单中' : '已添加');
         refreshWlsList();
       })
       .catch(function (e) {

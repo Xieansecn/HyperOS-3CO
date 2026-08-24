@@ -540,7 +540,7 @@ header .sub {
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 #tab-logs.active { display: flex; }
-#tab-logs .log-box { margin: 0; max-height: none; }
+#tab-logs .log-box { margin: 0 0 72px; max-height: none; }
 
 /* ---------- M3 按钮（outlined） ---------- */
 .mini-btn {
@@ -683,10 +683,9 @@ header .sub {
   position: absolute;
   right: 16px;
   bottom: 16px;
-  display: flex;
+  display: none;
   flex-direction: column-reverse;
   gap: 12px;
-  display: none;
 }
 .fab-group.show { display: flex; }
 .fab {
