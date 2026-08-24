@@ -98,7 +98,7 @@ wait_until_login
 init_platform_config
 
 # ---- 性能热控调优（默认关闭，避免影响快充/温控） ----
-# 需要时手动开启: echo 1 > /data/adb/modules/Asphyxia/config/enable_perf_thermal
+# 需要时手动开启: echo 1 > /data/adb/modules/HyperOS-3CO/config/enable_perf_thermal
 if flag_enabled enable_perf_thermal 0; then
     log "[module] 性能热控调优已启用（可能影响充电/温控）..."
     init_thermal_perf_config

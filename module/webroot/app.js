@@ -4,7 +4,7 @@
   var api = window.ksuApi;
 
   /* ---------- 常量 ---------- */
-  var FALLBACK_MOD_ID = 'Asphyxia';
+  var FALLBACK_MOD_ID = 'HyperOS-3CO';
   var MOD_DIR = '/data/adb/modules/' + FALLBACK_MOD_ID;
   var AUTO_REFRESH_MS = 60000;
   var REFRESH_DELAY_MS = 500;

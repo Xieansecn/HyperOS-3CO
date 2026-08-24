@@ -22,7 +22,6 @@ set_perm "$MODPATH/scripts/utils.sh" 0 0 0644
 set_perm "$MODPATH/module.prop" 0 0 0644
 set_perm "$MODPATH/system.prop" 0 0 0644
 set_perm "$MODPATH/README.md" 0 0 0644
-set_perm "$MODPATH/模块说明文档.md" 0 0 0644
 
 MODDIR="$MODPATH"
 . "$MODPATH/scripts/utils.sh"

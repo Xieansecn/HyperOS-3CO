@@ -8,7 +8,7 @@
 #   apply  : 非豁免三方应用 -> miuiAuto + 从 FrozenNewWhiteList 移除 + 确保息屏清理/睡眠开关
 #   restore: 全部三方恢复 noRestrict + 重加三名单 + 回滚内核冻结键（复用 powerkeeper_patch/sync）
 # 豁免集: dumpsys deviceidle 白名单(user) + $MODDIR/screen_off_freeze_whitelist + 系统组件
-# 环境变量: PK_RESTART=1 写后重启 PowerKeeper | DRY_RUN=1 只读演练 | THIRD_PARTY_APPS 覆盖三方列表
+# 环境变量: PK_RESTART=1 写后重启 PowerKeeper | DRY_RUN=1 跳过 PowerKeeper 重启（DB 仍写入） | THIRD_PARTY_APPS 覆盖三方列表
 MODDIR=$(cd "$(dirname "$0")/.." && pwd)
 . "$MODDIR/scripts/utils.sh"
 

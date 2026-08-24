@@ -17,10 +17,10 @@ cd "$SRC"
 
 # 统一权限：脚本 0755，文档/配置 0644
 chmod 0755 action.sh customize.sh service.sh uninstall.sh scripts/*.sh META-INF/com/google/android/update-binary bin/sqlite3 2>/dev/null || true
-chmod 0644 README.md module.prop system.prop scripts/utils.sh META-INF/com/google/android/updater-script webroot/* 2>/dev/null || true
+chmod 0644 README.md module.prop system.prop scripts/utils.sh META-INF/com/google/android/updater-script webroot/* screen_off_freeze_whitelist 2>/dev/null || true
 
 rm -f "$OUT"
-zip -r9 -X "$OUT"     META-INF     README.md     action.sh customize.sh service.sh uninstall.sh module.prop system.prop     bin scripts functions webroot     -x 'config/*' 'dryrun*' 'simjoyose/*' 'tools/*' '*.log' '*.sql'
+zip -r9 -X "$OUT"     META-INF     README.md     action.sh customize.sh service.sh uninstall.sh module.prop system.prop screen_off_freeze_whitelist     bin scripts functions webroot     -x 'config/*' 'dryrun*' 'simjoyose/*' 'tools/*' '*.log' '*.sql'
 
 echo ""
 echo "打包完成: $OUT"

@@ -11,7 +11,7 @@ HR_DB="${HR_DB:-/data/data/com.miui.powerkeeper/databases/highrefreshrate.db}"
 
 echo "========== 模块与开关 =========="
 grep -E '^(name|version)=' "$MODDIR/module.prop" 2>/dev/null || echo "module.prop 缺失"
-for f in enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost; do
+for f in enable_battery_sync enable_static_protect enable_refresh_follow enable_perf_thermal gpu_boost enable_screen_off_freeze enable_kernel_freeze; do
     if [ -f "$MODDIR/config/$f" ]; then
         echo "  $f = $(cat "$MODDIR/config/$f")"
     else
@@ -66,7 +66,6 @@ ls -1 "$MODDIR/config/backups/" 2>/dev/null | head -n 10 || echo "  暂无备份
 
 echo ""
 echo "========== 息屏冻结 =========="
-echo "  config: enable_screen_off_freeze=$(cat "$MODDIR/config/enable_screen_off_freeze" 2>/dev/null || echo 0) enable_kernel_freeze=$(cat "$MODDIR/config/enable_kernel_freeze" 2>/dev/null || echo 0)"
 echo "  screen_off_clean_app=$("$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='screen_off_clean_app';" 2>/dev/null)  params=$("$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='screen_off_clean_app_params';" 2>/dev/null)"
 echo "  sleep_mode_cloud=$("$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_cloud';" 2>/dev/null)"
 echo "  FrozenControlStatus=$("$SQLITE" "$CC_DB" "SELECT IFNULL(configureParam,'(缺失)') FROM GlobalFeatureTable WHERE configureName='FrozenControlStatus';" 2>/dev/null)"

@@ -253,6 +253,7 @@ module_unlock() {
             exec 9>&- 2>/dev/null || true
         else
             rm -rf "$MODULE_LOCK_DIR" 2>/dev/null || true
+            trap - EXIT INT TERM
         fi
         MODULE_LOCKED=0
     fi

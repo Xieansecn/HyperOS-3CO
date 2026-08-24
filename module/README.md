@@ -37,14 +37,14 @@
 
 ---
 
-# 定制版 v13（260824）说明
+# HyperOS-3CO v14（260825）说明
 
 基于原 260721 manet 模块，在保留原有机型适配、GPU/IO/温控节点调优的基础上，增加并强化以下云控定制能力。
 
 > **WebUI（260824）**：KernelSU WebUI 界面（`webroot/`）已升级为**底部四 Tab**（状态 / 开关 / 操作 / 日志）：
 > - **状态**：概览卡片（电池 / Joyose / PowerKeeper / 高刷 / deviceidle / 备份）+ 手动刷新；
 > - **开关**：五个 `config/` 开关实时读写；
-> - **操作**：菜单 1-8 全部动作 + 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
+> - **操作**：菜单 1-10 全部动作 + 拨号暗码提示（`*#*#76937#*#*` 触发 PowerKeeper 云控拉取）+ **备份管理**（列出 / 删除 `config/backups/` 备份）；
 > - **日志**：占满整页的实时日志终端，可**导出 txt 到 Download**。
 > - 全部功能仍经 `action.sh <命令>` 驱动；作者署名 Xieansecn & Deepseek Harness。
 
@@ -93,13 +93,13 @@
   - WebUI 仅在 KernelSU 管理器内可用（Magisk/APatch 无此入口，不影响其他功能）。
 - **命令行入口**（WebUI / 终端 / 自动化通用）：`action.sh` 支持带参数直接执行，不再进入交互菜单：
   ```sh
-  sh /data/adb/modules/Asphyxia/action.sh <命令>
+  sh /data/adb/modules/HyperOS-3CO/action.sh <命令>
   # 命令: joyose | sync_battery | powerkeeper | refresh | status
   #       restart_pk | backup | restore_charging | config | version | help
   #       config_get <key> | config_set <key> <值>
   #       backup_list | backup_delete <文件名>
   ```
-  数字 1-9 同样可用（对应交互菜单）。`config_set` 可写：`enable_battery_sync` / `enable_static_protect` / `enable_refresh_follow` / `enable_perf_thermal` / `gpu_boost`。`backup_list` 输出 `文件名<TAB>字节数`，`backup_delete` 带文件名白名单校验（防路径穿越）。
+  数字 1-9 同样可用（对应交互菜单）。`config_set` 可写：`enable_battery_sync` / `enable_static_protect` / `enable_refresh_follow` / `enable_perf_thermal` / `gpu_boost` / `enable_screen_off_freeze` / `enable_kernel_freeze`。`backup_list` 输出 `文件名<TAB>字节数`，`backup_delete` 带文件名白名单校验（防路径穿越）。
 - `action.sh` 交互（funbox 风格）：**所有动作执行完输出后都会“按任意音量键返回菜单”**，不再被重绘冲掉。优先调用 `/data/adb/modules/funbox/keycheck` 检测按键（无 funbox 时回退 `getevent` 去抖，键位已对齐）；**音量↓ 移动、音量↑ 确认**；每次按键前**无条件 `clear` 清屏**再重绘菜单（与 funbox 一致，避免管理器里刷屏），当前项用 **`-> [N] 功能名`** 高亮；`sleep 0.4` 等待按键抬起，一次按压只算一次输入。
 - `action.sh` 菜单：
   1. 覆盖 Joyose 云控
@@ -130,4 +130,4 @@
 
 ## 8. 性能热控调优（默认关闭）
 - 默认不执行任何可能影响充电/温控的操作。
-- 如确实需要，手动开启：`echo 1 > /data/adb/modules/Asphyxia/config/enable_perf_thermal`，重启后生效；恢复充电时直接删掉该开关或执行菜单 [8]。
+- 如确实需要，手动开启：`echo 1 > /data/adb/modules/HyperOS-3CO/config/enable_perf_thermal`，重启后生效；恢复充电时直接删掉该开关或执行菜单 [8]。

@@ -125,7 +125,9 @@ menu_label() {
         6) echo "重启 PowerKeeper（重新读取云控）" ;;
         7) echo "备份云控数据库原文件" ;;
         8) echo "恢复充电（解除热控限制/恢复服务/重读本地云控）" ;;
-        9) echo "退出" ;;
+        9) echo "息屏冻结（立即应用）" ;;
+        10) echo "即时恢复（解除冻结）" ;;
+        11) echo "退出" ;;
         *) echo "无效选项" ;;
     esac
 }
@@ -265,7 +267,7 @@ cli_dispatch() {
                 echo "[action] 未知命令: $1 (action.sh help 查看用法)" >&2
                 return 1
             fi
-            if [ "$ID" = "9" ]; then
+            if [ "$ID" = "11" ]; then
                 echo "[action] 退出"
                 return 0
             fi
