@@ -56,6 +56,16 @@
           </div>
           <div id="wl-list"><div class="log-empty">加载中…</div></div>
         </div>
+        <div class="card" id="wls-card">
+          <div class="card-title"><span>系统白名单（云控）</span><span class="hint" id="wls-summary"></span></div>
+          <div class="dial-hint">直接编辑系统豁免链：从名单移除的应用可能被息屏冻结/后台清理；写入后重启 PowerKeeper 生效</div>
+          <div class="wls-tabs" id="wls-tabs"></div>
+          <div class="wl-add-row">
+            <input type="text" class="wl-input" id="wls-input" placeholder="包名，如 com.tencent.mm" />
+            <button type="button" class="mini-btn" id="wls-add-btn">添加</button>
+          </div>
+          <div id="wls-list"><div class="log-empty">选择上方名单查看</div></div>
+        </div>
       </section>
 
       <!-- ============ 开关 ============ -->

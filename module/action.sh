@@ -305,9 +305,95 @@ cli_dispatch() {
                 return 1
             fi
             ;;
+        wl_sys_list)
+            # 用法: wl_sys_list <名单名>  输出每行一个包名
+            case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
+                *)
+                    echo "[action] 未知名单: $2 (可用: FrozenNewWhiteList dozeWhiteListApps levelUtimateSpecialApps sleep_mode_network_white_apps)" >&2
+                    return 1
+                    ;;
+            esac
+            WLS_VAL="$(case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
+                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
+                sleep_mode_network_white_apps)
+                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
+            esac)"
+            printf '%s' "$WLS_VAL" | tr ';' '\n' | tr ':' '\n' | tr ',' '\n' | sed '/^[[:space:]]*$/d'
+            ;;
+        wl_sys_add)
+            # 用法: wl_sys_add <名单名> <包名>
+            case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
+                *) echo "[action] 未知名单: $2" >&2; return 1 ;;
+            esac
+            is_valid_pkg "$3" || { echo "[action] 非法包名: $3" >&2; return 1; }
+            ensure_module_lock
+            SEP=";"
+            case "$2" in dozeWhiteListApps|levelUtimateSpecialApps) SEP=":" ;; sleep_mode_network_white_apps) SEP="," ;; esac
+            CUR="$(case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
+                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
+                sleep_mode_network_white_apps)
+                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
+            esac)"
+            if printf '%s' "$CUR" | tr "$SEP" '\n' | grep -qxF "$3"; then
+                echo "[action] 已在 $2: $3"
+            else
+                NEWVAL="$3"
+                [ -n "$CUR" ] && NEWVAL="$CUR$SEP$3"
+                case "$2" in
+                    FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
+                        backup_db "$CC_DB" cloud_configure
+                        sqlite3_x "$CC_DB" "INSERT OR REPLACE INTO GlobalFeatureTable (userId, configureName, configureParam) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
+                        ;;
+                    sleep_mode_network_white_apps)
+                        backup_db "$UC_DB" user_configure
+                        sqlite3_x "$UC_DB" "INSERT OR REPLACE INTO misc (userId, name, value) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
+                        ;;
+                esac
+                echo "[action] 已加入 $2: $3"
+            fi
+            ;;
+        wl_sys_remove)
+            # 用法: wl_sys_remove <名单名> <包名>
+            case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps|sleep_mode_network_white_apps) ;;
+                *) echo "[action] 未知名单: $2" >&2; return 1 ;;
+            esac
+            ensure_module_lock
+            SEP=";"
+            case "$2" in dozeWhiteListApps|levelUtimateSpecialApps) SEP=":" ;; sleep_mode_network_white_apps) SEP="," ;; esac
+            CUR="$(case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
+                    "$SQLITE" "$CC_DB" "SELECT configureParam FROM GlobalFeatureTable WHERE configureName='$2';" 2>/dev/null ;;
+                sleep_mode_network_white_apps)
+                    "$SQLITE" "$UC_DB" "SELECT value FROM misc WHERE name='sleep_mode_network_white_apps';" 2>/dev/null ;;
+            esac)"
+            if ! printf '%s' "$CUR" | tr "$SEP" '\n' | grep -qxF "$3"; then
+                echo "[action] 不在 $2: $3" >&2
+                return 1
+            fi
+            NEWVAL="$(printf '%s' "$CUR" | tr "$SEP" '\n' | grep -vxF "$3" | paste -sd"$SEP" -)"
+            case "$2" in
+                FrozenNewWhiteList|dozeWhiteListApps|levelUtimateSpecialApps)
+                    backup_db "$CC_DB" cloud_configure
+                    sqlite3_x "$CC_DB" "INSERT OR REPLACE INTO GlobalFeatureTable (userId, configureName, configureParam) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
+                    ;;
+                sleep_mode_network_white_apps)
+                    backup_db "$UC_DB" user_configure
+                    sqlite3_x "$UC_DB" "INSERT OR REPLACE INTO misc (userId, name, value) VALUES (0, '$2', '$NEWVAL');" || { echo "[action] 写入失败" >&2; return 1; }
+                    ;;
+            esac
+            echo "[action] 已从 $2 移除: $3"
+            ;;
+
         help|-h|--help)
             grep '^# 用法' "$0" | head -n 1 | sed 's/^# *//'
-            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze whitelist_list whitelist_add whitelist_remove config config_get config_set backup_list backup_delete version"
+            echo "  可用命令: joyose sync_battery powerkeeper refresh status restart_pk backup restore_charging freeze unfreeze"
+    echo "    whitelist_list whitelist_add whitelist_remove wl_sys_list wl_sys_add wl_sys_remove"
+    echo "    config config_get config_set backup_list backup_delete version"
             ;;
         *)
             ID="$(cli_action_id "$1")"

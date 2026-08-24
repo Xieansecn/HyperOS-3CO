@@ -766,6 +766,136 @@
       });
   }
 
+  /* ---------- 系统白名单（云控，可编辑） ---------- */
+  var WLS_DEFS = [
+    { name: 'FrozenNewWhiteList', label: '冻结豁免' },
+    { name: 'dozeWhiteListApps', label: 'Doze 豁免' },
+    { name: 'levelUtimateSpecialApps', label: '终极保护' },
+    { name: 'sleep_mode_network_white_apps', label: '睡眠网络' }
+  ];
+  var currentWls = null;
+
+  function isValidPkg(pkg) {
+    return /^[A-Za-z0-9_.]+$/.test(pkg) &&
+      pkg.charAt(0) !== '.' && pkg.slice(-1) !== '.' && pkg.indexOf('..') < 0;
+  }
+
+  function renderWlsTabs() {
+    var wrap = $('wls-tabs');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    WLS_DEFS.forEach(function (d) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'wls-tab' + (currentWls === d.name ? ' active' : '');
+      btn.textContent = d.label;
+      btn.addEventListener('click', function () { switchWls(d.name); });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function switchWls(name) {
+    currentWls = name;
+    renderWlsTabs();
+    refreshWlsList();
+  }
+
+  function refreshWlsList() {
+    var listEl = $('wls-list');
+    var sumEl = $('wls-summary');
+    if (!listEl || !sumEl || !currentWls) return;
+    var reqName = currentWls;
+    api.exec(shCmd('wl_sys_list ' + currentWls))
+      .then(function (res) {
+        if (destroyed || reqName !== currentWls) return;
+        var pkgs = [];
+        String(res.stdout).split('\n').forEach(function (line) {
+          var p = line.trim();
+          if (p && isValidPkg(p)) pkgs.push(p);
+        });
+        sumEl.textContent = pkgs.length ? pkgs.length + ' 个' : '';
+        listEl.innerHTML = '';
+        if (!pkgs.length) {
+          listEl.innerHTML = '<div class="log-empty">名单为空</div>';
+          return;
+        }
+        pkgs.forEach(function (pkg) {
+          var row = document.createElement('div');
+          row.className = 'wl-item';
+          var nm = document.createElement('span');
+          nm.className = 'wl-name';
+          nm.textContent = pkg;
+          nm.title = pkg;
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'wl-del';
+          del.textContent = '移除';
+          del.addEventListener('click', function () { removeWls(pkg, del); });
+          row.appendChild(nm);
+          row.appendChild(del);
+          listEl.appendChild(row);
+        });
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        listEl.innerHTML = '<div class="log-empty">读取失败</div>';
+        logErr('系统白名单异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  function addWls() {
+    if (state.busy) { toast('有任务正在执行，请稍候'); return; }
+    var input = $('wls-input');
+    if (!input || !currentWls) return;
+    var pkg = input.value.trim();
+    if (!pkg) { toast('请输入包名'); return; }
+    if (!isValidPkg(pkg)) { logErr('非法包名，已拒绝: ' + pkg); return; }
+    input.disabled = true;
+    api.exec(shCmd('wl_sys_add ' + currentWls + ' ' + pkg))
+      .then(function (res) {
+        if (destroyed) return;
+        input.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || ('添加失败 errno=' + res.errno));
+          toast('添加失败');
+          return;
+        }
+        if (res.stdout) logLine(res.stdout.trim());
+        input.value = '';
+        toast('已添加');
+        refreshWlsList();
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        input.disabled = false;
+        logErr('添加异常: ' + ((e && e.message) || e));
+      });
+  }
+
+  function removeWls(pkg, delBtn) {
+    if (state.busy) { toast('有任务正在执行，请稍候'); return; }
+    if (!window.confirm('确认从「' + currentWls + '」移除 ' + pkg + ' ？\n移除后该应用可能被息屏冻结/后台清理。')) return;
+    delBtn.disabled = true;
+    api.exec(shCmd('wl_sys_remove ' + currentWls + ' ' + pkg))
+      .then(function (res) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        if (res.errno !== 0) {
+          logErr(res.stderr || '移除失败');
+          toast('移除失败');
+          return;
+        }
+        if (res.stdout) logLine(res.stdout.trim());
+        toast('已移除');
+        refreshWlsList();
+      })
+      .catch(function (e) {
+        if (destroyed) return;
+        delBtn.disabled = false;
+        logErr('移除异常: ' + ((e && e.message) || e));
+      });
+  }
+
   /* ---------- 日志导出 ---------- */
   function collectLogText() {
     var box = ensureLog();
@@ -893,6 +1023,17 @@
         }
       });
     }
+    var wlsAddBtn = $('wls-add-btn');
+    if (wlsAddBtn) wlsAddBtn.addEventListener('click', addWls);
+    var wlsInput = $('wls-input');
+    if (wlsInput) {
+      wlsInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addWls();
+        }
+      });
+    }
     var btnTheme = $('btn-theme');
     if (btnTheme) btnTheme.addEventListener('click', cycleTheme);
     applyTheme(getThemePref());
@@ -925,6 +1066,8 @@
     refreshStatus();
     refreshBackups();
     refreshWhitelist();
+    renderWlsTabs();
+    switchWls(WLS_DEFS[0].name);
     autoTimer = setInterval(autoRefresh, AUTO_REFRESH_MS);
   }
 

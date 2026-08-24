@@ -608,3 +608,28 @@ header .sub {
   margin-right: 6px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 系统白名单名单切换 chips */
+.wls-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 8px;
+  flex-wrap: wrap;
+}
+.wls-tab {
+  appearance: none;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  border-radius: 8px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.wls-tab.active {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  border-color: transparent;
+}
