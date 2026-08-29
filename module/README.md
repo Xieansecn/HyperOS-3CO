@@ -104,7 +104,7 @@
   #       wl_sys_list <名单> | wl_sys_add <名单> <包名> | wl_sys_remove <名单> <包名>
   ```
   数字 1-11 同样可用（对应菜单项）。`config_set` 可写：`enable_battery_sync` / `enable_static_protect` / `enable_refresh_follow` / `enable_perf_thermal` / `gpu_boost` / `enable_screen_off_freeze` / `enable_kernel_freeze` / `enable_nightly_freeze` / `freeze_start_time` / `freeze_end_time`。`backup_list` 输出 `文件名<TAB>字节数`，`backup_delete` 带文件名白名单校验（防路径穿越）。
-- **KernelSU action 按钮（`action.sh`）**：模块列表里的 action 按钮是**音量键交互菜单**，走 funbox 风格。**所有动作执行完输出后都会“按任意音量键返回菜单”**，不再被重绘冲掉。优先调用 `/data/adb/modules/funbox/keycheck` 检测按键（无 funbox 时回退 `getevent` 去抖，键位已对齐）；**音量↓ 移动、音量↑ 确认**；每次按键前**无条件 `clear` 清屏**再重绘菜单（与 funbox 一致，避免管理器里刷屏），当前项用 **`-> [N] 功能名`** 高亮；`sleep 0.4` 等待按键抬起，一次按压只算一次输入。
+- **KernelSU action 按钮（`action.sh`）**：模块列表里的 action 按钮是**音量键交互菜单**，走 funbox 风格。**所有动作执行完输出后都会“按任意音量键返回菜单”**，不再被重绘冲掉。使用模块自带 `keycheck` 检测按键（不再依赖 funbox，无则回退 `getevent` 去抖，键位已对齐）；**音量↓ 移动、音量↑ 确认**；每次按键前**无条件 `clear` 清屏**再重绘菜单（与 funbox 一致，避免管理器里刷屏），当前项用 **`-> [N] 功能名`** 高亮；`sleep 0.4` 等待按键抬起，一次按压只算一次输入。
 - `action.sh` 菜单：
   1. 覆盖 Joyose 云控
   2. 同步电池优化白名单

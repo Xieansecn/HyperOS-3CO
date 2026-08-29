@@ -44,8 +44,8 @@ draw_menu() {
     echo "======================"
 }
 
-# ---- funbox 同款按键检测：优先 keycheck，回退 getevent ----
-KEY_CHECK="${KEY_CHECK:-/data/adb/modules/funbox/keycheck}"
+# ---- 按键检测：模块内置 keycheck 优先，回退 getevent（不依赖外部 funbox）----
+KEY_CHECK="${KEY_CHECK:-$MODDIR/bin/keycheck}"
 VOL_UP_SIGNAL=42
 VOL_DOWN_SIGNAL=41
 

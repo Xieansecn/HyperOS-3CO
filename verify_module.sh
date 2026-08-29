@@ -30,7 +30,7 @@ done
 echo "  通过 JSON 文件数: $JSON_COUNT"
 
 echo "==== 3. 包内脚本权限 ===="
-for f in action.sh customize.sh service.sh uninstall.sh scripts/joyose_config.sh scripts/powerkeeper_patch.sh scripts/sync_battery_whitelist.sh scripts/refresh_follow_system.sh scripts/backup_cloud_db.sh scripts/restore_charging.sh scripts/check_status.sh scripts/screen_off_freeze.sh scripts/freeze_scheduler.sh scripts/api.sh scripts/reset_module.sh META-INF/com/google/android/update-binary; do
+for f in action.sh customize.sh service.sh uninstall.sh scripts/joyose_config.sh scripts/powerkeeper_patch.sh scripts/sync_battery_whitelist.sh scripts/refresh_follow_system.sh scripts/backup_cloud_db.sh scripts/restore_charging.sh scripts/check_status.sh scripts/screen_off_freeze.sh scripts/freeze_scheduler.sh scripts/api.sh scripts/reset_module.sh META-INF/com/google/android/update-binary bin/keycheck bin/sqlite3; do
     if [ ! -x "$SRC/$f" ]; then
         echo "  FAIL 不可执行: $f"
         FAIL=1
